@@ -1200,6 +1200,7 @@ void drawSpotifyScreen(const SpotifyTrackInfo& track) {
       u8g2.setCursor(iconX + 14, iconY + 7);
       u8g2.print("Paused");
     }
+  }
   u8g2.setFont(u8g2_font_5x8_tf);
   if (track.active) {
     int ctrlX = MARGIN_X + 112; // Right of the cover
