@@ -10,8 +10,8 @@ EInkDisplay_WirelessPaperV1_2 display;
 #include <HTTPUpdate.h>
 #include <WiFiMulti.h>
 #include <WiFiClientSecure.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
 #include <WebServer.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
@@ -4302,17 +4302,29 @@ void checkAndPerformOTA() {
   int httpCode = http.GET();
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
-    // Parse JSON
-#if ARDUINOJSON_VERSION_MAJOR >= 7
-    JsonDocument doc;
-#else
-    DynamicJsonDocument doc(1024);
-#endif
-    deserializeJson(doc, payload);
+    // Custom JSON parsing to avoid ArduinoJson library dependency
+    bool updateAvailable = false;
+    String downloadUrl = "";
     
-    if (doc["update_available"] == true) {
-      String downloadUrl = String(PALA_CLOUD_URL) + doc["download_url"].as<String>();
-      Serial.println("Update available! Downloading from: " + downloadUrl);
+    int upIdx = payload.indexOf("\"update_available\":");
+    if (upIdx != -1) {
+       updateAvailable = (payload.indexOf("true", upIdx) != -1 && payload.indexOf("true", upIdx) < upIdx + 25);
+    }
+    
+    if (updateAvailable) {
+       int urlIdx = payload.indexOf("\"download_url\":");
+       if (urlIdx != -1) {
+          int startQuote = payload.indexOf("\"", urlIdx + 15);
+          if (startQuote != -1) {
+             int endQuote = payload.indexOf("\"", startQuote + 1);
+             if (endQuote != -1) {
+                downloadUrl = String(PALA_CLOUD_URL) + payload.substring(startQuote + 1, endQuote);
+             }
+          }
+       }
+       
+      if (downloadUrl.length() > 0) {
+        Serial.println("Update available! Downloading from: " + downloadUrl);
       
       t_httpUpdate_return ret = httpUpdate.update(client, downloadUrl);
       switch (ret) {
@@ -4325,6 +4337,7 @@ void checkAndPerformOTA() {
         case HTTP_UPDATE_OK:
           Serial.println("HTTP_UPDATE_OK - Device restarting!");
           break;
+      }
       }
     } else {
       Serial.println("Firmware is up to date.");
