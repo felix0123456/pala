@@ -11,6 +11,7 @@ EInkDisplay_WirelessPaperV1_2 display;
 #include <WiFiMulti.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include <WebServer.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
@@ -4302,7 +4303,11 @@ void checkAndPerformOTA() {
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
     // Parse JSON
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument doc;
+#else
     DynamicJsonDocument doc(1024);
+#endif
     deserializeJson(doc, payload);
     
     if (doc["update_available"] == true) {
