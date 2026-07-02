@@ -3,7 +3,11 @@ EInkDisplay_WirelessPaperV1_2 display;
 
 #include "pala_one_sleep_black_icon_v4.h"
 
+#define FIRMWARE_VERSION "1.7.5"
+#define PALA_CLOUD_URL "https://pala.felixresch.com"
+
 #include <WiFi.h>
+#include <HTTPUpdate.h>
 #include <WiFiMulti.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -309,9 +313,10 @@ enum SettingsEntryType {
   SET_ENTRY_NIGHT_MODE,
   SET_ENTRY_TEXT_SIZE,
   SET_ENTRY_SCREENSAVER,
-  SET_ENTRY_MEMORY
+  SET_ENTRY_MEMORY,
+  SET_ENTRY_OTA_SYNC
 };
-static const int SETTINGS_COUNT = 7;
+static const int SETTINGS_COUNT = 8;
 static int selectedSettingItem = 1;
 
 static bool g_servicesActive = false;
@@ -3289,6 +3294,9 @@ void drawSettings() {
         label = "Storage: " + String(pct) + "% (" + String(booksSize / 1024) + "K books, " + String(freeSize / 1024) + "K free)";
         break;
       }
+      case SET_ENTRY_OTA_SYNC:
+        label = "Cloud Sync & Update";
+        break;
     }
     drawMenuBulletRow(y, label, i == selectedSettingItem, i == selectedSettingItem);
     y += lineH;
@@ -3338,6 +3346,48 @@ void handleModeSettings() {
         break;
       case SET_ENTRY_MEMORY:
         // Double clicking storage redraws to refresh details
+        drawSettings();
+        break;
+      case SET_ENTRY_OTA_SYNC:
+        prepareMenuFrame();
+        u8g2.setFont(BOLD_FONT);
+        u8g2.setCursor(MARGIN_X, 11);
+        u8g2.print("Sync & OTA");
+        gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
+        u8g2.setFont(MAIN_FONT);
+        u8g2.setCursor(MARGIN_X, 33);
+        u8g2.print("Connecting to WiFi...");
+        display.update();
+        
+        if (WiFi.status() != WL_CONNECTED && g_wifiSsid.length() > 0) {
+            WiFi.mode(WIFI_STA);
+            WiFi.begin(g_wifiSsid.c_str(), g_wifiPass.c_str());
+            int retries = 0;
+            while(WiFi.status() != WL_CONNECTED && retries < 20) {
+                delay(500);
+                retries++;
+            }
+        }
+        
+        if(WiFi.status() == WL_CONNECTED) {
+            u8g2.setCursor(MARGIN_X, 47);
+            u8g2.print("Checking for Updates...");
+            display.update();
+            checkAndPerformOTA();
+            
+            u8g2.setCursor(MARGIN_X, 61);
+            u8g2.print("Syncing Books...");
+            display.update();
+            autoSyncBooks();
+            
+            u8g2.setCursor(MARGIN_X, 75);
+            u8g2.print("Done!");
+        } else {
+            u8g2.setCursor(MARGIN_X, 47);
+            u8g2.print("WiFi Failed.");
+        }
+        display.update();
+        delay(2000);
         drawSettings();
         break;
     }
@@ -4236,6 +4286,70 @@ void handleModeChess() {
 // ============================================================================
 //  Setup / Mode handlers / Loop
 // ============================================================================
+// --- OTA and Auto-Sync ---
+void checkAndPerformOTA() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  WiFiClientSecure client;
+  client.setInsecure(); // Since the server is HTTPS, we bypass certificate validation for simplicity here
+  
+  HTTPClient http;
+  String checkUrl = String(PALA_CLOUD_URL) + "/api/firmware/check?version=" + String(FIRMWARE_VERSION);
+  http.begin(client, checkUrl);
+  
+  int httpCode = http.GET();
+  if (httpCode == HTTP_CODE_OK) {
+    String payload = http.getString();
+    // Parse JSON
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, payload);
+    
+    if (doc["update_available"] == true) {
+      String downloadUrl = String(PALA_CLOUD_URL) + doc["download_url"].as<String>();
+      Serial.println("Update available! Downloading from: " + downloadUrl);
+      
+      t_httpUpdate_return ret = httpUpdate.update(client, downloadUrl);
+      switch (ret) {
+        case HTTP_UPDATE_FAILED:
+          Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+          break;
+        case HTTP_UPDATE_NO_UPDATES:
+          Serial.println("HTTP_UPDATE_NO_UPDATES");
+          break;
+        case HTTP_UPDATE_OK:
+          Serial.println("HTTP_UPDATE_OK - Device restarting!");
+          break;
+      }
+    } else {
+      Serial.println("Firmware is up to date.");
+    }
+  } else {
+    Serial.printf("OTA Check failed, error: %s\n", http.errorToString(httpCode).c_str());
+  }
+  http.end();
+}
+
+void autoSyncBooks() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  WiFiClientSecure client;
+  client.setInsecure();
+  
+  HTTPClient http;
+  // Use ESP32 MAC address as device ID
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  String syncUrl = String(PALA_CLOUD_URL) + "/api/sync?device_id=" + mac;
+  
+  http.begin(client, syncUrl);
+  int httpCode = http.GET();
+  if (httpCode == HTTP_CODE_OK) {
+    Serial.println("Sync complete.");
+    // Detailed book download logic will go here
+  }
+  http.end();
+}
+
 void setup() {
   Serial.begin(115200);
   delay(200);

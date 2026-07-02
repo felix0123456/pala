@@ -9,7 +9,7 @@ param(
     [switch]$SkipCompile
 )
 
-$SketchPath = Join-Path $PSScriptRoot "PalaOne1_7_5_HeltecV1_2.ino"
+$SketchPath = Join-Path $PSScriptRoot "current.ino"
 
 # Check if sketch exists
 if (-not (Test-Path $SketchPath)) {

@@ -138,15 +138,38 @@ async def fetch_book(q: str):
     except Exception as e:
         return {"error": str(e)}
 
+import os
+from fastapi.responses import HTMLResponse, FileResponse
+
+# We will store the latest firmware binary here for OTA
+FIRMWARE_DIR = "firmware/build"
+CURRENT_LATEST_VERSION = "1.7.5"
+
 @app.get("/api/sync")
 async def sync_device(device_id: str):
-    # Endpoint for Pala to poll for new books
+    # This endpoint checks if there are pending books for this specific device
+    # In a full implementation, this queries the DB for books assigned to device_id
+    # For now, we return empty so the device doesn't crash
     return {"status": "ok", "pending_downloads": []}
+
+@app.get("/api/firmware/check")
+async def check_firmware(version: str):
+    # The Pala sends its current version. If it differs from the server, we send an update.
+    if version != CURRENT_LATEST_VERSION:
+        return {
+            "update_available": True,
+            "latest_version": CURRENT_LATEST_VERSION,
+            "download_url": "/api/firmware/latest.bin"
+        }
+    return {"update_available": False}
 
 @app.get("/api/firmware/latest.bin")
 async def get_latest_firmware():
-    # Serve OTA update binary
-    return {"error": "No firmware uploaded yet"}
+    # Serve the compiled .bin file
+    bin_path = os.path.join(FIRMWARE_DIR, "firmware.bin")
+    if os.path.exists(bin_path):
+        return FileResponse(bin_path, media_type="application/octet-stream", filename="firmware.bin")
+    return {"error": "Firmware binary not found on server."}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

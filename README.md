@@ -11,8 +11,10 @@ _Das Pala Projekt kombiniert eine lokale E-Reader Firmware (ESP32) mit einer Clo
 
 _Die Architektur besteht aus einem Server-Backend und der Mikrocontroller-Software._
 
-- **Python:** Die Dateien im Hauptverzeichnis (z.B. `app.py`) bilden den Pala Cloud Hub, gehostet auf Coolify. Dieser kümmert sich um automatische E-Book-Downloads, Dateikonvertierungen und das Bereitstellen der OTA-Firmware-Updates.
-- **C++:** Die Firmware (basierend auf Arduino/C++) in `firmware/current/` steuert das E-Paper-Display, verbindet sich per WiFi mit dem Pala Cloud Hub, synchronisiert Kalender-Termine, lädt E-Books im `.txt`-Format herunter und kommuniziert mit der Spotify API für den Screensaver.
+- **Python (Cloud Hub):** Die Dateien im Hauptverzeichnis (z.B. `app.py`) bilden den Pala Cloud Hub, gehostet auf Coolify. 
+  - **OTA Updates:** Das Backend stellt unter `/api/firmware/check` eine Versionierungs-Prüfung bereit und liefert unter `/api/firmware/latest.bin` kompilierte Binärdateien aus, welche von den Geräten per HTTP-Stream geflasht werden. Die aktuellen Binaries müssen im Ordner `firmware/build/` bereitgestellt werden.
+  - **Auto-Sync:** Über `/api/sync` fragt der E-Reader automatisch ab, ob neue Bücher heruntergeladen werden sollen.
+- **C++ (Firmware):** Die Firmware in `firmware/current/` steuert das Display, verbindet sich per WiFi mit der Cloud und holt über `HTTPUpdate` Over-The-Air (OTA) Updates ab. Dies kann manuell im E-Reader-Menü unter `Settings -> Cloud Sync & Update` ausgelöst werden.
 
 ## 3. Hardware Structure & Details
 
