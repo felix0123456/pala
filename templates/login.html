@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>Login to Pala Cloud</h2>
+    {% if error %}
+    <p style="color: #ef4444;">{{ error }}</p>
+    {% endif %}
+    <form method="POST" action="/login">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Login</button>
+    </form>
+    <p style="text-align: center; margin-top: 1rem;">
+        Don't have an account? <a href="/register" style="color: var(--accent-yellow);">Register here</a>
+    </p>
+</div>
+{% endblock %}

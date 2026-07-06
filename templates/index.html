@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p style="text-align:center; max-width: 500px;">Your centralized platform for Pala device management, auto-fetching ebooks, and OTA updates.</p>
+
+<div class="card">
+    <h2>Automated E-Book Fetcher</h2>
+    <p>Search Project Gutenberg to instantly download and convert a book for your Pala.</p>
+    <input type="text" id="book-query" placeholder="Enter book title or author (e.g. Alice in Wonderland)">
+    <button onclick="fetchBook()">Fetch & Convert</button>
+    <p id="status-msg" style="color: var(--accent-yellow); margin-top: 15px;"></p>
+</div>
+
+<div class="card">
+    <h2>Your Devices</h2>
+    {% if devices %}
+        <ul style="list-style: none; padding: 0;">
+        {% for device in devices %}
+            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
+                <strong>{{ device.name }}</strong> ({{ device.mac_address }})<br>
+                <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }} | Sleep Timeout: {{ device.sleep_timeout }}s</span>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No devices registered yet. Connect your Pala to WiFi to sync!</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Your Books</h2>
+    {% if books %}
+        <ul style="list-style: none; padding: 0;">
+        {% for book in books %}
+            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
+                <strong>{{ book.title }}</strong><br>
+                <span style="color: var(--text-muted); font-size: 0.9em;">
+                    Bookmarks: 
+                    {% for bm in book.bookmarks %}
+                        Page {{ bm.page_index }}
+                    {% endfor %}
+                </span>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No books fetched yet.</p>
+    {% endif %}
+</div>
+
+<script>
+    async function fetchBook() {
+        const query = document.getElementById('book-query').value;
+        const status = document.getElementById('status-msg');
+        if(!query) return;
+        status.innerText = "Searching Project Gutenberg...";
+        try {
+            let res = await fetch('/api/fetch?q=' + encodeURIComponent(query));
+            let data = await res.json();
+            status.innerText = data.message || data.error;
+            if(data.message) {
+                setTimeout(() => window.location.reload(), 2000);
+            }
+        } catch (e) {
+            status.innerText = "Error fetching book.";
+        }
+    }
+</script>
+{% endblock %}

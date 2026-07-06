@@ -2,5 +2,9 @@ fastapi
 uvicorn
 requests
 beautifulsoup4
+sqlalchemy
+passlib[bcrypt]
+python-multipart
+jinja2
 ebooklib
 sqlalchemy

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pala Cloud Hub</title>
+    <style>
+        :root {
+            --bg-dark: #0a0f0d;
+            --card-bg: #111a14;
+            --border: #1a2e20;
+            --primary-green: #10b981;
+            --accent-yellow: #fbbf24;
+            --text-main: #ecfdf5;
+            --text-muted: #a7f3d0;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg-dark); 
+            color: var(--text-main); 
+            margin: 0; 
+            padding: 2rem; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { 
+            color: var(--accent-yellow); 
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.2);
+            font-size: 2.5rem;
+        }
+        .card { 
+            background: var(--card-bg); 
+            padding: 2rem; 
+            border-radius: 16px; 
+            border: 1px solid var(--border); 
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.05);
+            max-width: 600px; 
+            width: 100%;
+            margin-top: 1rem; 
+        }
+        h2 { color: var(--primary-green); }
+        p { color: var(--text-muted); line-height: 1.6; }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: white;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--accent-yellow);
+        }
+        button {
+            background: linear-gradient(135deg, var(--primary-green), #059669);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+            transform: translateY(-1px);
+        }
+        .nav {
+            margin-bottom: 2rem;
+        }
+        .nav a {
+            color: var(--primary-green);
+            text-decoration: none;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pala Cloud Hub</h1>
+    <div class="nav">
+        {% if user %}
+            <span>Welcome, {{ user.username }}</span> | 
+            <a href="/logout">Logout</a>
+        {% else %}
+            <a href="/login">Login</a> | <a href="/register">Register</a>
+        {% endif %}
+    </div>
+
+    {% block content %}
+    {% endblock %}
+</body>
+</html>
