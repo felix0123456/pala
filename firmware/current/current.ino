@@ -15,6 +15,10 @@ EInkDisplay_WirelessPaperV1_2 display;
 #include <WebServer.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
+
+// Forward declarations to prevent arduino-cli preprocessor hangs
+void checkAndPerformOTA();
+void autoSyncBooks();
 #include <time.h>
 
 #include <LittleFS.h>
