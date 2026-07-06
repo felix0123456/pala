@@ -21,10 +21,6 @@ void checkAndPerformOTA();
 void autoSyncBooks();
 
 #include "web_spa.h"
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
 #include <time.h>
 
 #include <LittleFS.h>
@@ -41,6 +37,12 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 
 #include <rom/tjpgd.h>
 #include "mbedtls/base64.h"
+
+// ---------------------- Bluetooth BLE Upload ----------------------
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 // ---------------------- Firmware Version ----------------------
 #define FW_VERSION "1.7.4"
@@ -721,12 +723,12 @@ void handleModeChess();
 void drawChessScreen();
 bool fetchChessPuzzle();
 
-static void safeCloseBook();
+void safeCloseBook();
 static void enterLibraryRoot(bool redraw);
 static void resetPreviewState();
-static void resetUiEphemeralState();
-static bool reopenCurrentBookIfNeeded();
-static void syncWakeState(bool reading);
+void resetUiEphemeralState();
+bool reopenCurrentBookIfNeeded();
+void syncWakeState(bool reading);
 static void resetInputFrontend();
 static void markUserActivity();
 
@@ -1277,7 +1279,7 @@ bool isUsbConnected() {
   #endif
 }
 
-static void safeCloseBook() {
+void safeCloseBook() {
   if (bookFile) bookFile.close();
 }
 
@@ -1286,7 +1288,7 @@ static void resetPreviewState() {
   bmPreviewSavedPage = 0;
 }
 
-static void resetUiEphemeralState() {
+void resetUiEphemeralState() {
   toastMsg = "";
   toastUntilMs = 0;
   resetPreviewState();
@@ -1307,7 +1309,7 @@ static void markUserActivity() {
   lastUserActionMs = millis();
 }
 
-static void syncWakeState(bool reading) {
+void syncWakeState(bool reading) {
   prefs.putInt("wake_mode", reading ? 1 : 0);
   if (reading && currentBookPath.length() > 0) prefs.putString("wake_path", currentBookPath);
   else prefs.remove("wake_path");
@@ -1330,7 +1332,7 @@ static void resetInputFrontend() {
   markUserActivity();
 }
 
-static bool reopenCurrentBookIfNeeded() {
+bool reopenCurrentBookIfNeeded() {
   if (currentBookPath.length() == 0) return false;
   safeCloseBook();
   bookFile = FS.open(currentBookPath, "r");
@@ -1709,7 +1711,7 @@ String prefKeyForBook(const String& path) {
   return String(buf);
 }
 
-static String normalizeTypography(const String& in) {
+String normalizeTypography(const String& in) {
   String out;
   out.reserve(in.length() + 8);
   size_t i = 0;
