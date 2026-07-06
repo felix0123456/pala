@@ -19,8 +19,6 @@ EInkDisplay_WirelessPaperV1_2 display;
 // Forward declarations to prevent arduino-cli preprocessor hangs
 void checkAndPerformOTA();
 void autoSyncBooks();
-
-#include "web_spa.h"
 #include <time.h>
 
 #include <LittleFS.h>
@@ -2808,6 +2806,7 @@ void drawBookmarksList() {
 // ============================================================================
 //  Web UI (SPA & JSON API)
 // ============================================================================
+#include "web_spa.h"
 
 // ---------------------- Bluetooth BLE Upload ----------------------
 
