@@ -34,8 +34,8 @@ if (-not $SkipCompile) {
     $process.StartInfo = $pinfo
     $process.Start() | Out-Null
     
-    # Wait for compile (up to 15 minutes / 900 seconds)
-    if ($process.WaitForExit(900000)) {
+    # Wait for compile (up to 30 minutes / 1800 seconds)
+    if ($process.WaitForExit(1800000)) {
         $stdout = $process.StandardOutput.ReadToEnd()
         $stderr = $process.StandardError.ReadToEnd()
         if ($process.ExitCode -ne 0) {
