@@ -85,6 +85,9 @@
     <div class="nav">
         {% if user %}
             <span>Welcome, {{ user.username }}</span> | 
+            {% if user.is_admin %}
+            <a href="/admin" style="color: var(--accent-yellow); font-weight: bold;">Admin Dashboard</a> |
+            {% endif %}
             <a href="/logout">Logout</a>
         {% else %}
             <a href="/login">Login</a> | <a href="/register">Register</a>

@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .admin-container {
+        max-width: 1000px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .admin-card {
+        background: var(--card-bg);
+        padding: 2rem;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.05);
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .table-container {
+        overflow-x: auto;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        color: var(--text-main);
+    }
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+    th {
+        color: var(--primary-green);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+    }
+    tr:hover td {
+        background: rgba(255, 255, 255, 0.02);
+    }
+    .action-btn {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        width: auto;
+        display: inline-block;
+        margin: 2px;
+    }
+    .danger-btn {
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+    }
+    .danger-btn:hover {
+        background: linear-gradient(135deg, #b91c1c, #991b1b);
+    }
+    .warning-btn {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+    .warning-btn:hover {
+        background: linear-gradient(135deg, #d97706, #b45309);
+    }
+    .badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.2);
+        color: var(--primary-green);
+    }
+    .badge.admin {
+        background: rgba(251, 191, 36, 0.2);
+        color: var(--accent-yellow);
+    }
+    form {
+        display: inline;
+    }
+</style>
+
+<h2 style="color: var(--text-main); margin-bottom: 1rem; text-align: center;">Administrator Dashboard</h2>
+
+<div class="admin-container">
+    <!-- Users Section -->
+    <div class="admin-card">
+        <h2>Manage Users</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.id }}</td>
+                        <td>{{ u.username }}</td>
+                        <td>
+                            {% if u.is_admin %}
+                                <span class="badge admin">Admin</span>
+                            {% else %}
+                                <span class="badge">User</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form action="/admin/user/{{ u.id }}/toggle-admin" method="POST">
+                                <button type="submit" class="action-btn warning-btn">Toggle Admin</button>
+                            </form>
+                            {% if u.id != user.id %}
+                            <form action="/admin/user/{{ u.id }}/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete user {{ u.username }}?');">
+                                <button type="submit" class="action-btn danger-btn">Delete</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Devices Section -->
+    <div class="admin-card">
+        <h2>Manage Devices</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>MAC Address</th>
+                        <th>Pairing Code</th>
+                        <th>Owner ID</th>
+                        <th>Settings</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in devices %}
+                    <tr>
+                        <td style="font-family: monospace;">{{ d.mac_address }}</td>
+                        <td>
+                            {% if d.pairing_code %}
+                                <span style="color: var(--accent-yellow); font-weight: bold;">{{ d.pairing_code }}</span>
+                            {% else %}
+                                <span style="color: var(--text-muted);">Paired</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ d.user_id if d.user_id else 'Unassigned' }}</td>
+                        <td style="font-size: 0.85em; color: var(--text-muted);">
+                            Bat: {{ d.battery_level }}% | Font: {{ d.font_size }}<br>
+                            Sleep: {{ d.sleep_timeout }}s | Gap: {{ d.line_gap }}
+                        </td>
+                        <td>
+                            {% if d.user_id %}
+                            <form action="/admin/device/{{ d.mac_address }}/unpair" method="POST" onsubmit="return confirm('Unpair device {{ d.mac_address }}?');">
+                                <button type="submit" class="action-btn warning-btn">Unpair</button>
+                            </form>
+                            {% endif %}
+                            <form action="/admin/device/{{ d.mac_address }}/delete" method="POST" onsubmit="return confirm('Delete device {{ d.mac_address }} completely?');">
+                                <button type="submit" class="action-btn danger-btn">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Books Section -->
+    <div class="admin-card">
+        <h2>Manage Books</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Owner ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in books %}
+                    <tr>
+                        <td>{{ b.id }}</td>
+                        <td>{{ b.title }}</td>
+                        <td>{{ b.user_id }}</td>
+                        <td>
+                            <form action="/admin/book/{{ b.id }}/delete" method="POST" onsubmit="return confirm('Delete book {{ b.title }}?');">
+                                <button type="submit" class="action-btn danger-btn">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Bookmarks Section -->
+    <div class="admin-card">
+        <h2>Manage Bookmarks</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Device MAC</th>
+                        <th>Book ID</th>
+                        <th>Page</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bm in bookmarks %}
+                    <tr>
+                        <td>{{ bm.id }}</td>
+                        <td style="font-family: monospace;">{{ bm.device_mac }}</td>
+                        <td>{{ bm.book_id }}</td>
+                        <td>{{ bm.page_index }}</td>
+                        <td>
+                            <form action="/admin/bookmark/{{ bm.id }}/delete" method="POST" onsubmit="return confirm('Delete this bookmark?');">
+                                <button type="submit" class="action-btn danger-btn">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

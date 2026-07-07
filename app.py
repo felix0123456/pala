@@ -27,6 +27,18 @@ with engine.connect() as conn:
         conn.commit()
     except Exception:
         pass
+    
+    try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE"))
+        conn.commit()
+    except Exception:
+        pass
+
+    try:
+        conn.execute(text("UPDATE users SET is_admin = 1 WHERE username = 'testuser'"))
+        conn.commit()
+    except Exception:
+        pass
 
 app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
@@ -73,6 +85,12 @@ async def register_get(request: Request):
 async def register_post(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     hashed_password = auth.get_password_hash(password)
     user = models.User(username=username, hashed_password=hashed_password)
+    
+    # First user is automatically admin
+    is_first = db.query(models.User).count() == 0
+    if is_first:
+        user.is_admin = True
+        
     db.add(user)
     try:
         db.commit()
@@ -198,6 +216,98 @@ async def upload_book(request: Request, file: UploadFile = File(...), db: Sessio
         db.commit()
     
     return {"status": "ok"}
+
+# ----------------- ADMIN DASHBOARD -----------------
+
+def get_current_admin_web(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/login"})
+    if getattr(user, "is_admin", False) is not True:
+        raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/?error=Not+authorized"})
+    return user
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    users = db.query(models.User).all()
+    devices = db.query(models.Device).all()
+    books = db.query(models.Book).all()
+    bookmarks = db.query(models.Bookmark).all()
+    return templates.TemplateResponse(request=request, name="admin.html", context={
+        "user": admin_user,
+        "users": users,
+        "devices": devices,
+        "books": books,
+        "bookmarks": bookmarks
+    })
+
+@app.post("/admin/user/{user_id}/toggle-admin")
+async def admin_toggle_user_admin(request: Request, user_id: int, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    target_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if target_user and target_user.id != admin_user.id:
+        target_user.is_admin = not getattr(target_user, "is_admin", False)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/user/{user_id}/delete")
+async def admin_delete_user(request: Request, user_id: int, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    if admin_user.id == user_id:
+        return RedirectResponse(url="/admin?error=Cannot+delete+yourself", status_code=status.HTTP_302_FOUND)
+    target_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if target_user:
+        # Clear device associations to allow re-pairing
+        for device in target_user.devices:
+            device.user_id = None
+        db.delete(target_user)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/device/{mac_address}/unpair")
+async def admin_unpair_device(request: Request, mac_address: str, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address).first()
+    if device:
+        device.user_id = None
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/device/{mac_address}/delete")
+async def admin_delete_device(request: Request, mac_address: str, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address).first()
+    if device:
+        db.query(models.Bookmark).filter(models.Bookmark.device_mac == mac_address).delete()
+        db.delete(device)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/book/{book_id}/delete")
+async def admin_delete_book(request: Request, book_id: int, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    book = db.query(models.Book).filter(models.Book.id == book_id).first()
+    if book:
+        # Attempt to delete file
+        if os.path.exists(book.file_path):
+            try:
+                os.remove(book.file_path)
+            except Exception:
+                pass
+        db.query(models.Bookmark).filter(models.Bookmark.book_id == book_id).delete()
+        db.delete(book)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+
+@app.post("/admin/bookmark/{bookmark_id}/delete")
+async def admin_delete_bookmark(request: Request, bookmark_id: int, db: Session = Depends(get_db)):
+    admin_user = get_current_admin_web(request, db)
+    bookmark = db.query(models.Bookmark).filter(models.Bookmark.id == bookmark_id).first()
+    if bookmark:
+        db.delete(bookmark)
+        db.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
 
 # ----------------- ESP32 SYNC API -----------------
 

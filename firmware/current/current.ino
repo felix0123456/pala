@@ -3264,12 +3264,15 @@ bool syncWithCloud() {
   u8g2.print("Syncing with server...");
   display.update();
 
+  WiFiClient client;
   HTTPClient http;
   String mac = WiFi.macAddress();
   
   // Register & Pairing
+  bool alreadyRegistered = false;
+  bool gotCode = false;
   while (true) {
-    http.begin("http://pala.felixresch.com/api/device/register");
+    http.begin(client, "http://pala.felixresch.com/api/device/register");
     http.addHeader("Content-Type", "application/json");
     int httpCode = http.POST("{\"mac_address\":\"" + mac + "\"}");
     if (httpCode == 200) {
@@ -3277,6 +3280,7 @@ bool syncWithCloud() {
       ALLOC_JSON_DOC(regDoc, 512);
       DeserializationError err = deserializeJson(regDoc, payload);
       if (!err && regDoc["status"] == "pairing") {
+        gotCode = true;
         String code = regDoc["code"].as<String>();
         prepareMenuFrame();
         u8g2.setFont(BOLD_FONT);
@@ -3305,12 +3309,38 @@ bool syncWithCloud() {
         http.end();
         continue;
       } else if (!err && regDoc["status"] == "ok") {
+        alreadyRegistered = true;
         http.end();
         break; // Registered!
       }
     }
     http.end();
     break; // Proceed or fail gracefully
+  }
+
+  if (!alreadyRegistered) {
+    if (!gotCode) {
+      prepareMenuFrame();
+      u8g2.setFont(BOLD_FONT);
+      u8g2.setCursor(MARGIN_X, 20);
+      u8g2.print("Device Pairing");
+      u8g2.setFont(MAIN_FONT);
+      u8g2.setCursor(MARGIN_X, 48);
+      u8g2.print("No code received");
+      u8g2.setCursor(MARGIN_X, 68);
+      u8g2.print("Check server/WiFi connection");
+      u8g2.setCursor(MARGIN_X, 100);
+      u8g2.print("Click button to continue");
+      display.update();
+
+      unsigned long waitStart = millis();
+      while (millis() - waitStart < 4000) {
+         if (digitalRead(BTN1) == LOW) { break; }
+         delay(50);
+      }
+    }
+    WiFi.disconnect(true, true);
+    return false;
   }
 
   prepareMenuFrame();
@@ -3324,11 +3354,11 @@ bool syncWithCloud() {
   display.update();
   
   // Pull
-  http.begin("http://pala.felixresch.com/api/sync/pull?mac=" + mac);
+  http.begin(client, "http://pala.felixresch.com/api/sync/pull?mac=" + mac);
   int httpCode = http.GET();
   if (httpCode == 200) {
     String payload = http.getString();
-ALLOC_JSON_DOC(doc, 1024);
+    ALLOC_JSON_DOC(doc, 1024);
     DeserializationError error = deserializeJson(doc, payload);
     if (!error) {
       if (doc.containsKey("font_size")) {
@@ -3361,8 +3391,9 @@ ALLOC_JSON_DOC(doc, 1024);
              u8g2.print("Downloading book...");
              display.update();
 
+             WiFiClient dlClient;
              HTTPClient httpDl;
-             httpDl.begin("http://pala.felixresch.com/api/book/" + String(b_id) + "?mac=" + mac);
+             httpDl.begin(dlClient, "http://pala.felixresch.com/api/book/" + String(b_id) + "?mac=" + mac);
              int dlCode = httpDl.GET();
              if (dlCode == 200) {
                File f = FS.open(fpath, "w");
@@ -3380,11 +3411,11 @@ ALLOC_JSON_DOC(doc, 1024);
   http.end();
 
   // Push
-  http.begin("http://pala.felixresch.com/api/sync/push");
+  http.begin(client, "http://pala.felixresch.com/api/sync/push");
   http.addHeader("Content-Type", "application/json");
-ALLOC_JSON_DOC(pushDoc, 1024);
+  ALLOC_JSON_DOC(pushDoc, 1024);
   pushDoc["mac_address"] = mac;
-if (HAS_BATTERY) {
+  if (HAS_BATTERY) {
     pushDoc["battery_level"] = g_batPct;
   } else {
     pushDoc["battery_level"] = 100;
