@@ -18,9 +18,9 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
 
-FIRMWARE_DIR = "firmware/build"
+FIRMWARE_DIR = os.getenv("FIRMWARE_DIR", "data/firmware/build")
 CURRENT_LATEST_VERSION = "1.7.5"
-BOOKS_DIR = "books"
+BOOKS_DIR = os.getenv("BOOKS_DIR", "data/books")
 
 os.makedirs(FIRMWARE_DIR, exist_ok=True)
 os.makedirs(BOOKS_DIR, exist_ok=True)
