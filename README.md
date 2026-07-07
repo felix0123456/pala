@@ -58,7 +58,22 @@ The Pala ESP32 operates as a "Smart Client". When the user presses the buttons t
 - **Purpose:** Downloads the raw `.txt` file for any new books added to the user's library.
 
 ### 5. Check OTA Firmware (`GET /api/firmware/check?version=1.5.0`)
-- **Purpose:** Compares the ESP32's current firmware version with `CURRENT_LATEST_VERSION` on the server. If an update is available, the ESP32 can download the `.bin` via `/api/firmware/latest.bin`.
+- **Purpose:** Compares the ESP32's current firmware version against the latest GitHub Release tag on `felix0123456/pala`. If an update is available, the server acts as a proxy to download the `.bin` file via `/api/firmware/latest.bin`.
+
+---
+
+## 🛠 Automated OTA Releases (GitHub Actions)
+
+The repository uses GitHub Actions to automate firmware compilation and distribution. 
+
+1. **Tagging a Release:** To push a new firmware update to all devices, simply create and push a new Git tag starting with `v` (e.g., `v1.7.6`).
+   ```bash
+   git tag v1.7.6
+   git push origin v1.7.6
+   ```
+2. **Compilation:** GitHub Actions will automatically provision an Ubuntu runner, install the `arduino-cli`, the ESP32 core, and required dependencies, and compile the `firmware/current/current.ino` sketch for the Heltec board.
+3. **Distribution:** Once compiled, the `.bin` file is automatically attached to a new **GitHub Release**.
+4. **Cloud Proxy:** The `Pala Cloud Hub` backend automatically queries the GitHub API to detect this new release. It will then instruct all connected ESP32 devices to perform an OTA update on their next sync, proxying the binary download directly from GitHub.
 
 ---
 

@@ -1,0 +1,45 @@
+name: Build and Release Firmware
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 Core
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Install Dependencies
+        run: |
+          arduino-cli lib install "U8g2_for_Adafruit_GFX"
+          arduino-cli lib install "Adafruit GFX Library"
+          # heltec-eink-modules is usually part of the Heltec BSP, if it's external, add it here.
+
+      - name: Compile Firmware
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:heltec_wireless_paper firmware/current/current.ino --output-dir build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: build/current.ino.bin
+          name: Firmware Release ${{ github.ref_name }}
+          body: |
+            Automated firmware release for PalaOne.
+            Flash manually or download via the Pala Cloud OTA functionality.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

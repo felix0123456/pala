@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI, Request, Depends, Form, HTTPException, status, Response
+import random
+from fastapi import FastAPI, Request, Depends, Form, HTTPException, status, Response, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -7,10 +8,12 @@ import requests
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
+from typing import Optional
 
 import models
 from database import engine, get_db
 import auth
+import time
 
 # Create DB tables
 models.Base.metadata.create_all(bind=engine)
@@ -19,7 +22,7 @@ app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
 
 FIRMWARE_DIR = os.getenv("FIRMWARE_DIR", "data/firmware/build")
-CURRENT_LATEST_VERSION = "1.7.5"
+GITHUB_REPO = "felix0123456/pala"
 BOOKS_DIR = os.getenv("BOOKS_DIR", "data/books")
 
 os.makedirs(FIRMWARE_DIR, exist_ok=True)
@@ -79,7 +82,50 @@ async def logout(response: Response):
     resp.delete_cookie("session_token")
     return resp
 
-# ----------------- BOOK FETCHING -----------------
+@app.post("/pair", response_class=HTMLResponse)
+async def pair_device(request: Request, code: str = Form(...), db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    device = db.query(models.Device).filter(models.Device.pairing_code == code).first()
+    if not device:
+        # User not found or bad code
+        user = db.query(models.User).filter(models.User.id == user.id).first()
+        return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": user.devices, "books": user.books, "error": "Invalid pairing code"})
+    
+    device.user_id = user.id
+    device.pairing_code = None
+    db.commit()
+    return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+
+@app.get("/device/{mac_address}", response_class=HTMLResponse)
+async def device_view(request: Request, mac_address: str, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(request=request, name="device.html", context={"device": device, "books": user.books})
+
+@app.post("/api/device/{mac_address}/settings")
+async def update_device_settings(mac_address: str, font_size: int = Form(...), sleep_timeout: int = Form(...), line_gap: int = Form(...), request: Request = None, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        raise HTTPException(status_code=404)
+    device.font_size = font_size
+    device.sleep_timeout = sleep_timeout
+    device.line_gap = line_gap
+    db.commit()
+    return {"status": "ok"}
+
+# ----------------- BOOK FETCHING & UPLOADING -----------------
 
 @app.get("/api/fetch")
 async def fetch_book(q: str, request: Request, db: Session = Depends(get_db)):
@@ -93,26 +139,61 @@ async def fetch_book(q: str, request: Request, db: Session = Depends(get_db)):
         if data.get("count", 0) > 0:
             book_data = data["results"][0]
             title = book_data["title"]
-            # Save dummy file logic for now
-            filename = f"{book_data['id']}.txt"
+            
+            # For Project Gutenberg, try to get the text format URL
+            text_url = None
+            formats = book_data.get("formats", {})
+            for fmt, url in formats.items():
+                if "text/plain" in fmt:
+                    text_url = url
+                    break
+            
+            if not text_url:
+                return {"error": "No plain text format available for this book."}
+            
+            # Fetch the actual text
+            text_res = requests.get(text_url)
+            text_content = text_res.text
+            
+            filename = f"gutenberg_{book_data['id']}.txt"
             filepath = os.path.join(BOOKS_DIR, filename)
             with open(filepath, "w", encoding="utf-8") as f:
-                f.write(f"This is a dummy text file for {title} fetched from Gutenberg.")
+                f.write(text_content)
             
             db_book = models.Book(title=title, file_path=filepath, user_id=user.id)
             db.add(db_book)
             db.commit()
 
-            return {"message": f"Successfully found '{title}'. Added to your library!"}
+            return {"message": f"Successfully fetched '{title}'. It will sync to your device."}
         return {"error": "Book not found."}
     except Exception as e:
         return {"error": str(e)}
+
+@app.post("/api/upload_book")
+async def upload_book(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    filename = file.filename
+    filepath = os.path.join(BOOKS_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    
+    # Check if already exists
+    existing = db.query(models.Book).filter(models.Book.user_id == user.id, models.Book.title == filename).first()
+    if not existing:
+        db_book = models.Book(title=filename, file_path=filepath, user_id=user.id)
+        db.add(db_book)
+        db.commit()
+    
+    return {"status": "ok"}
 
 # ----------------- ESP32 SYNC API -----------------
 
 class DeviceRegister(BaseModel):
     mac_address: str
-    user_id: int # The user ID to bind this device to (in a real scenario, this is tricky. Maybe use a pairing code?)
+    user_id: Optional[int] = None
 
 class SyncPushData(BaseModel):
     mac_address: str
@@ -126,15 +207,24 @@ class SyncPushData(BaseModel):
 async def register_device(data: DeviceRegister, db: Session = Depends(get_db)):
     device = db.query(models.Device).filter(models.Device.mac_address == data.mac_address).first()
     if not device:
-        device = models.Device(mac_address=data.mac_address, user_id=data.user_id)
+        # Generate 6-digit code
+        code = str(random.randint(100000, 999999))
+        device = models.Device(mac_address=data.mac_address, pairing_code=code)
         db.add(device)
         db.commit()
+        return {"status": "pairing", "code": code}
+    elif not device.user_id:
+        if not device.pairing_code:
+            device.pairing_code = str(random.randint(100000, 999999))
+            db.commit()
+        return {"status": "pairing", "code": device.pairing_code}
+    
     return {"status": "ok"}
 
 @app.post("/api/sync/push")
 async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
     device = db.query(models.Device).filter(models.Device.mac_address == data.mac_address).first()
-    if not device:
+    if not device or not device.user_id:
         raise HTTPException(status_code=401, detail="Device not registered")
     
     device.battery_level = data.battery_level
@@ -162,9 +252,9 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 @app.get("/api/sync/pull")
-async def sync_pull(mac_address: str, db: Session = Depends(get_db)):
-    device = db.query(models.Device).filter(models.Device.mac_address == mac_address).first()
-    if not device:
+async def sync_pull(mac: str, db: Session = Depends(get_db)):
+    device = db.query(models.Device).filter(models.Device.mac_address == mac).first()
+    if not device or not device.user_id:
         raise HTTPException(status_code=401, detail="Device not registered")
     
     # Return settings and books that belong to the user
@@ -179,9 +269,9 @@ async def sync_pull(mac_address: str, db: Session = Depends(get_db)):
     }
 
 @app.get("/api/book/{book_id}")
-async def download_book(book_id: int, mac_address: str, db: Session = Depends(get_db)):
-    device = db.query(models.Device).filter(models.Device.mac_address == mac_address).first()
-    if not device:
+async def download_book(book_id: int, mac: str, db: Session = Depends(get_db)):
+    device = db.query(models.Device).filter(models.Device.mac_address == mac).first()
+    if not device or not device.user_id:
         raise HTTPException(status_code=401, detail="Device not registered")
     
     book = db.query(models.Book).filter(models.Book.id == book_id, models.Book.user_id == device.user_id).first()
@@ -192,22 +282,67 @@ async def download_book(book_id: int, mac_address: str, db: Session = Depends(ge
 
 # ----------------- FIRMWARE OTA -----------------
 
+cached_release_info = None
+last_release_check = 0
+
+def get_latest_github_release():
+    global cached_release_info, last_release_check
+    now = time.time()
+    if cached_release_info and (now - last_release_check < 300):
+        return cached_release_info
+    
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            tag_name = data.get("tag_name", "").lstrip("v")
+            assets = data.get("assets", [])
+            download_url = ""
+            for asset in assets:
+                if asset.get("name", "").endswith(".bin"):
+                    download_url = asset.get("browser_download_url")
+                    break
+            
+            if tag_name and download_url:
+                cached_release_info = {"version": tag_name, "download_url": download_url}
+                last_release_check = now
+                return cached_release_info
+    except Exception as e:
+        print(f"Error fetching GitHub release: {e}")
+    
+    return cached_release_info
+
 @app.get("/api/firmware/check")
 async def check_firmware(version: str):
-    if version != CURRENT_LATEST_VERSION:
-        return {
-            "update_available": True,
-            "latest_version": CURRENT_LATEST_VERSION,
-            "download_url": "/api/firmware/latest.bin"
-        }
+    release = get_latest_github_release()
+    if release:
+        if version != release["version"]:
+            return {
+                "update_available": True,
+                "latest_version": release["version"],
+                "download_url": "/api/firmware/latest.bin"
+            }
     return {"update_available": False}
 
 @app.get("/api/firmware/latest.bin")
 async def get_latest_firmware():
+    release = get_latest_github_release()
+    if release and release.get("download_url"):
+        try:
+            r = requests.get(release["download_url"], stream=True, timeout=15)
+            if r.status_code == 200:
+                headers = {"Content-Disposition": "attachment; filename=firmware.bin"}
+                return Response(content=r.content, media_type="application/octet-stream", headers=headers)
+        except Exception as e:
+            return {"error": str(e)}
+    
+    # Fallback to local file if GitHub fails or no release exists
     bin_path = os.path.join(FIRMWARE_DIR, "firmware.bin")
     if os.path.exists(bin_path):
         return FileResponse(bin_path, media_type="application/octet-stream", filename="firmware.bin")
-    return {"error": "Firmware binary not found on server."}
+        
+    return {"error": "Firmware binary not found on server or GitHub."}
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

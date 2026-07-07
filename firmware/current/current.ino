@@ -43,7 +43,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 #include <BLE2902.h>
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.7.4"
+#define FW_VERSION "1.7.5"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
