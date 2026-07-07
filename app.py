@@ -15,8 +15,18 @@ from database import engine, get_db
 import auth
 import time
 
+from sqlalchemy import text
+
 # Create DB tables
 models.Base.metadata.create_all(bind=engine)
+
+# Auto-migrate: add pairing_code if missing
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE devices ADD COLUMN pairing_code VARCHAR"))
+        conn.commit()
+    except Exception:
+        pass
 
 app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
