@@ -35,17 +35,17 @@ async def index(request: Request, db: Session = Depends(get_db)):
     
     # Reload user relationships
     user = db.query(models.User).filter(models.User.id == user.id).first()
-    return templates.TemplateResponse("index.html", {"request": request, "user": user, "devices": user.devices, "books": user.books})
+    return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": user.devices, "books": user.books})
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_get(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="login.html")
 
 @app.post("/login", response_class=HTMLResponse)
 async def login_post(request: Request, response: Response, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not auth.verify_password(password, user.hashed_password):
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid username or password"})
+        return templates.TemplateResponse(request=request, name="login.html", context={"error": "Invalid username or password"})
     
     token = auth.create_session(user.id)
     resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
@@ -54,7 +54,7 @@ async def login_post(request: Request, response: Response, username: str = Form(
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
-    return templates.TemplateResponse("register.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="register.html")
 
 @app.post("/register", response_class=HTMLResponse)
 async def register_post(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
@@ -66,7 +66,7 @@ async def register_post(request: Request, username: str = Form(...), password: s
         db.refresh(user)
     except IntegrityError:
         db.rollback()
-        return templates.TemplateResponse("register.html", {"request": request, "error": "Username already exists"})
+        return templates.TemplateResponse(request=request, name="register.html", context={"error": "Username already exists"})
     
     token = auth.create_session(user.id)
     resp = RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
