@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card" style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+    <a href="/" style="text-decoration: none; font-size: 24px; color: var(--text-muted);">&larr; Home</a>
+    <h2 style="margin: 0;">Device: {{ device.name }} ({{ device.mac_address }})</h2>
+</div>
+
+<div class="card">
+    <h2>Device Settings</h2>
+    <p class="muted">Changes will be synced to your Pala when it next connects to the internet.</p>
+    <form action="/api/device/{{ device.mac_address }}/settings" method="POST" class="stack" id="device-settings-form">
+        <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+            <div>
+                <label>Font Size</label>
+                <select name="font_size" id="setting-font" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text); border-radius: 8px;">
+                    <option value="8" {% if device.font_size == 8 %}selected{% endif %}>8px &mdash; tiny</option>
+                    <option value="10" {% if device.font_size == 10 %}selected{% endif %}>10px &mdash; small</option>
+                    <option value="12" {% if device.font_size == 12 %}selected{% endif %}>12px &mdash; medium</option>
+                    <option value="14" {% if device.font_size == 14 %}selected{% endif %}>14px &mdash; large</option>
+                </select>
+            </div>
+            <div>
+                <label>Auto-Sleep after</label>
+                <select name="sleep_timeout" id="setting-sleep" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text); border-radius: 8px;">
+                    <option value="30" {% if device.sleep_timeout == 30 %}selected{% endif %}>30 seconds</option>
+                    <option value="60" {% if device.sleep_timeout == 60 %}selected{% endif %}>1 minute</option>
+                    <option value="120" {% if device.sleep_timeout == 120 %}selected{% endif %}>2 minutes</option>
+                    <option value="300" {% if device.sleep_timeout == 300 %}selected{% endif %}>5 minutes</option>
+                    <option value="600" {% if device.sleep_timeout == 600 %}selected{% endif %}>10 minutes</option>
+                    <option value="1800" {% if device.sleep_timeout == 1800 %}selected{% endif %}>30 minutes</option>
+                </select>
+            </div>
+            <div>
+                <label>Line Spacing</label>
+                <select name="line_gap" id="setting-lgap" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text); border-radius: 8px;">
+                    <option value="0" {% if device.line_gap == 0 %}selected{% endif %}>0 px &mdash; compact</option>
+                    <option value="1" {% if device.line_gap == 1 %}selected{% endif %}>1 px &mdash; normal</option>
+                    <option value="2" {% if device.line_gap == 2 %}selected{% endif %}>2 px &mdash; relaxed</option>
+                    <option value="3" {% if device.line_gap == 3 %}selected{% endif %}>3 px &mdash; loose</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" style="margin-top: 15px;">Save Settings</button>
+    </form>
+    <p id="settings-status" style="color: var(--success); margin-top: 10px; display: none;">Settings saved!</p>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h2>Upload Book to Cloud</h2>
+    <p class="muted">Upload a book here. It will be downloaded to your Pala on next sync.</p>
+    <form action="/api/upload_book" method="POST" enctype="multipart/form-data" class="stack" id="upload-book-form">
+        <input type="file" name="file" accept=".txt" required style="padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); width: 100%;">
+        <button type="submit" style="margin-top: 15px;">Upload</button>
+    </form>
+    <p id="upload-status" style="color: var(--success); margin-top: 10px; display: none;">Upload complete!</p>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h2>Your Library (Synced to {{ device.name }})</h2>
+    {% if books %}
+        <ul style="list-style: none; padding: 0;">
+        {% for book in books %}
+            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 15px;">
+                <div style="font-size: 24px;">&#128214;</div>
+                <div>
+                    <strong>{{ book.title }}</strong><br>
+                </div>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Your library is empty. Upload a book above or use the fetcher on the home page.</p>
+    {% endif %}
+</div>
+
+<script>
+    document.getElementById('device-settings-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const res = await fetch(form.action, { method: 'POST', body: formData });
+        if (res.ok) {
+            const status = document.getElementById('settings-status');
+            status.style.display = 'block';
+            setTimeout(() => status.style.display = 'none', 3000);
+        }
+    });
+
+    document.getElementById('upload-book-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const res = await fetch(form.action, { method: 'POST', body: formData });
+        if (res.ok) {
+            const status = document.getElementById('upload-status');
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+                window.location.reload();
+            }, 1500);
+        }
+    });
+</script>
+{% endblock %}

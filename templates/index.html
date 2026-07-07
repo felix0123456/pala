@@ -12,13 +12,27 @@
 </div>
 
 <div class="card">
+    <h2>Pair a Device</h2>
+    {% if error %}
+    <p style="color: var(--danger); font-weight: 500;">{{ error }}</p>
+    {% endif %}
+    <p>Enter the 6-digit code shown on your Pala to link it to your account.</p>
+    <form action="/pair" method="POST" style="display: flex; gap: 10px; margin-top: 15px;">
+        <input type="text" name="code" placeholder="6-Digit Code" required maxlength="6" style="max-width: 200px;">
+        <button type="submit">Pair</button>
+    </form>
+</div>
+
+<div class="card">
     <h2>Your Devices</h2>
     {% if devices %}
         <ul style="list-style: none; padding: 0;">
         {% for device in devices %}
             <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
-                <strong>{{ device.name }}</strong> ({{ device.mac_address }})<br>
-                <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }} | Sleep Timeout: {{ device.sleep_timeout }}s</span>
+                <a href="/device/{{ device.mac_address }}" style="color: var(--text); text-decoration: none;">
+                    <strong>{{ device.name }}</strong> ({{ device.mac_address }})<br>
+                    <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }} | Sleep Timeout: {{ device.sleep_timeout }}s</span>
+                </a>
             </li>
         {% endfor %}
         </ul>

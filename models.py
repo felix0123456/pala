@@ -17,7 +17,8 @@ class Device(Base):
 
     mac_address = Column(String, primary_key=True, index=True)
     name = Column(String, default="My Pala")
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    pairing_code = Column(String, index=True, nullable=True)
     battery_level = Column(Integer, default=100)
     
     font_size = Column(Integer, default=10)
