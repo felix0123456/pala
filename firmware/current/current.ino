@@ -3230,6 +3230,8 @@ void stopUploadServicesOnly() {
 bool syncWithCloud() {
   if (g_wifiSsid.length() == 0) return false;
 
+  prepareMenuFrame();
+
   u8g2.setFont(BOLD_FONT);
   u8g2.setCursor(MARGIN_X, 11);
   u8g2.print("Cloud Sync");
@@ -3276,7 +3278,7 @@ bool syncWithCloud() {
       DeserializationError err = deserializeJson(regDoc, payload);
       if (!err && regDoc["status"] == "pairing") {
         String code = regDoc["code"].as<String>();
-        gfx.fillScreen(1); // Clear screen
+        prepareMenuFrame();
         u8g2.setFont(BOLD_FONT);
         u8g2.setCursor(MARGIN_X, 20);
         u8g2.print("Device Pairing");
@@ -3311,7 +3313,7 @@ bool syncWithCloud() {
     break; // Proceed or fail gracefully
   }
 
-  gfx.fillScreen(1);
+  prepareMenuFrame();
   u8g2.setFont(BOLD_FONT);
   u8g2.setCursor(MARGIN_X, 11);
   u8g2.print("Cloud Sync");
