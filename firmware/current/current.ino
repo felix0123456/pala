@@ -1,24 +1,14 @@
 #include <heltec-eink-modules.h>
-EInkDisplay_WirelessPaperV1_2 display;
 
 #include "pala_one_sleep_black_icon_v4.h"
 
-#define FIRMWARE_VERSION "1.7.5"
-#define PALA_CLOUD_URL "https://pala.felixresch.com"
-
 #include <WiFi.h>
-#include <HTTPUpdate.h>
 #include <WiFiMulti.h>
-#include <WiFiClientSecure.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
-
-// Forward declarations to prevent arduino-cli preprocessor hangs
-void checkAndPerformOTA();
-void autoSyncBooks();
 #include <time.h>
 
 #include <LittleFS.h>
@@ -32,18 +22,22 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 #include <esp_wifi.h>
 #include <esp_bt.h>
 #include <esp_sleep.h>
+#include <Update.h>
 
 #include <rom/tjpgd.h>
 #include "mbedtls/base64.h"
+#include <ArduinoJson.h>
 
-// ---------------------- Bluetooth BLE Upload ----------------------
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+  #define ALLOC_JSON_DOC(name, size) JsonDocument name
+#else
+  #define ALLOC_JSON_DOC(name, size) DynamicJsonDocument name(size)
+#endif
+
+EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.7.5"
+#define FW_VERSION "1.7.7"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -166,9 +160,11 @@ static const uint8_t MAX_BOOKMARKS = 12;
 #endif
 
 // ---------------------- Button ----------------------
-#define BTN 0
+#define BTN1 0
+#define BTN2 33
+#define BTN3 37
 
-// “Feel” tuning
+// â€œFeelâ€ tuning
 static const uint32_t DOUBLE_MS   = 240;
 static const uint32_t TRIPLE_MS   = 420;
 static const uint32_t LONG_MS     = 950;
@@ -324,10 +320,9 @@ enum SettingsEntryType {
   SET_ENTRY_NIGHT_MODE,
   SET_ENTRY_TEXT_SIZE,
   SET_ENTRY_SCREENSAVER,
-  SET_ENTRY_MEMORY,
-  SET_ENTRY_OTA_SYNC
+  SET_ENTRY_MEMORY
 };
-static const int SETTINGS_COUNT = 8;
+static const int SETTINGS_COUNT = 7;
 static int selectedSettingItem = 1;
 
 static bool g_servicesActive = false;
@@ -559,7 +554,7 @@ static const uint32_t BTN_QUEUE_RECOVER_THRESHOLD = 10;
 
 volatile uint8_t  btnQHead = 0;
 volatile uint8_t  btnQTail = 0;
-volatile bool     btnQState[BTN_Q];
+volatile uint8_t  btnQState[BTN_Q];
 volatile uint32_t btnQTimeMs[BTN_Q];
 volatile uint32_t g_isrDropCount = 0;
 
@@ -580,7 +575,10 @@ void IRAM_ATTR btnISR() {
     btnQTail = (uint8_t)((btnQTail + 1) % BTN_Q);
     g_isrDropCount++;
   }
-  btnQState[btnQHead]  = (digitalRead(BTN) == LOW);
+  uint8_t state = 0;
+  if (digitalRead(BTN1) == LOW) state |= 0x01;
+  if (digitalRead(BTN2) == LOW || digitalRead(BTN3) == LOW) state |= 0x02;
+  btnQState[btnQHead]  = state;
   btnQTimeMs[btnQHead] = isrNowMs();
   btnQHead = next;
 }
@@ -622,56 +620,42 @@ struct ButtonState {
     resetClicks();
   }
 
-  void poll() {
-    resetClicks();
+  void processRaw(bool rawPressed, uint32_t edgeT) {
+    if ((uint32_t)(edgeT - lastStableChange) <= DEBOUNCE_MS) return;
+    if (rawPressed == stablePressed) return;
 
-    uint8_t headSnap;
-    noInterrupts();
-    headSnap = btnQHead;
-    interrupts();
+    bool prevPressed = stablePressed;
+    stablePressed = rawPressed;
+    lastStableChange = edgeT;
 
-    while (btnQTail != headSnap) {
-      noInterrupts();
-      bool rawPressed = btnQState[btnQTail];
-      uint32_t edgeT  = btnQTimeMs[btnQTail];
-      btnQTail = (uint8_t)((btnQTail + 1) % BTN_Q);
-      interrupts();
-
-      if ((uint32_t)(edgeT - lastStableChange) <= DEBOUNCE_MS) continue;
-      if (rawPressed == stablePressed) continue;
-
-      bool prevPressed = stablePressed;
-      stablePressed = rawPressed;
-      lastStableChange = edgeT;
-
-      if (!prevPressed && stablePressed) {
-        pressStart = edgeT;
-        pressArmed = true;
-      }
-
-      if (prevPressed && !stablePressed) {
-        if (pressArmed) {
-          uint32_t dur = (uint32_t)(edgeT - pressStart);
-          if (dur >= LONG_MS) {
-            clickCount = 0;
-            longClick = true;
-          } else {
-            clickCount++;
-            lastRelease = edgeT;
-            if (clickCount == 1) firstClickRelease = edgeT;
-            if (clickCount >= 4) {
-              clickCount = 0;
-              quadClick = true;
-            }
-          }
-        }
-        pressArmed = false;
-        pressStart = 0;
-      }
+    if (!prevPressed && stablePressed) {
+      pressStart = edgeT;
+      pressArmed = true;
     }
 
+    if (prevPressed && !stablePressed) {
+      if (pressArmed) {
+        uint32_t dur = (uint32_t)(edgeT - pressStart);
+        if (dur >= LONG_MS) {
+          clickCount = 0;
+          longClick = true;
+        } else {
+          clickCount++;
+          lastRelease = edgeT;
+          if (clickCount == 1) firstClickRelease = edgeT;
+          if (clickCount >= 4) {
+            clickCount = 0;
+            quadClick = true;
+          }
+        }
+      }
+      pressArmed = false;
+      pressStart = 0;
+    }
+  }
+
+  void evaluateClicks(uint32_t now) {
     if (clickCount > 0) {
-      uint32_t now = millis();
       bool emit = false;
       if (clickCount <= 2) emit = (uint32_t)(now - lastRelease) > DOUBLE_MS;
       else if (clickCount == 3) emit = (uint32_t)(now - firstClickRelease) > TRIPLE_MS;
@@ -689,7 +673,42 @@ struct ButtonState {
     return shortClick || doubleClick || tripleClick || quadClick || longClick;
   }
 };
-ButtonState btns;
+
+struct DualButtonState {
+  ButtonState b1;
+  ButtonState b2;
+
+  void poll() {
+    b1.resetClicks();
+    b2.resetClicks();
+
+    uint8_t headSnap;
+    noInterrupts();
+    headSnap = btnQHead;
+    interrupts();
+
+    while (btnQTail != headSnap) {
+      noInterrupts();
+      uint8_t rawState = btnQState[btnQTail];
+      uint32_t edgeT  = btnQTimeMs[btnQTail];
+      btnQTail = (uint8_t)((btnQTail + 1) % BTN_Q);
+      interrupts();
+
+      b1.processRaw((rawState & 0x01) != 0, edgeT);
+      b2.processRaw((rawState & 0x02) != 0, edgeT);
+    }
+    
+    uint32_t now = millis();
+    b1.evaluateClicks(now);
+    b2.evaluateClicks(now);
+  }
+
+  bool anyClick() const {
+    return b1.anyClick() || b2.anyClick();
+  }
+};
+DualButtonState btns;
+
 
 // ---- Forward declarations ----
 void drawCenter(const char* a, const char* b = nullptr);
@@ -721,12 +740,12 @@ void handleModeChess();
 void drawChessScreen();
 bool fetchChessPuzzle();
 
-void safeCloseBook();
+static void safeCloseBook();
 static void enterLibraryRoot(bool redraw);
 static void resetPreviewState();
-void resetUiEphemeralState();
-bool reopenCurrentBookIfNeeded();
-void syncWakeState(bool reading);
+static void resetUiEphemeralState();
+static bool reopenCurrentBookIfNeeded();
+static void syncWakeState(bool reading);
 static void resetInputFrontend();
 static void markUserActivity();
 
@@ -1277,7 +1296,7 @@ bool isUsbConnected() {
   #endif
 }
 
-void safeCloseBook() {
+static void safeCloseBook() {
   if (bookFile) bookFile.close();
 }
 
@@ -1286,7 +1305,7 @@ static void resetPreviewState() {
   bmPreviewSavedPage = 0;
 }
 
-void resetUiEphemeralState() {
+static void resetUiEphemeralState() {
   toastMsg = "";
   toastUntilMs = 0;
   resetPreviewState();
@@ -1307,7 +1326,7 @@ static void markUserActivity() {
   lastUserActionMs = millis();
 }
 
-void syncWakeState(bool reading) {
+static void syncWakeState(bool reading) {
   prefs.putInt("wake_mode", reading ? 1 : 0);
   if (reading && currentBookPath.length() > 0) prefs.putString("wake_path", currentBookPath);
   else prefs.remove("wake_path");
@@ -1323,14 +1342,14 @@ static void enterLibraryRoot(bool redraw = true) {
 }
 
 static void resetInputFrontend() {
-  while (digitalRead(BTN) == LOW) delay(5);
+  while (digitalRead(BTN1) == LOW) delay(5);
   delay(DEBOUNCE_MS + 8);
   clearButtonQueue();
-  btns.resetState();
+  btns.b1.resetState();
   markUserActivity();
 }
 
-bool reopenCurrentBookIfNeeded() {
+static bool reopenCurrentBookIfNeeded() {
   if (currentBookPath.length() == 0) return false;
   safeCloseBook();
   bookFile = FS.open(currentBookPath, "r");
@@ -1709,7 +1728,7 @@ String prefKeyForBook(const String& path) {
   return String(buf);
 }
 
-String normalizeTypography(const String& in) {
+static String normalizeTypography(const String& in) {
   String out;
   out.reserve(in.length() + 8);
   size_t i = 0;
@@ -2809,6 +2828,10 @@ void drawBookmarksList() {
 #include "web_spa.h"
 
 // ---------------------- Bluetooth BLE Upload ----------------------
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 BLEServer* pServer = NULL;
 BLEService* pService = NULL;
@@ -3204,9 +3227,188 @@ void stopUploadServicesOnly() {
   g_sleepUploadTmpPath = "";
 }
 
+bool syncWithCloud() {
+  if (g_wifiSsid.length() == 0) return false;
+
+  u8g2.setFont(BOLD_FONT);
+  u8g2.setCursor(MARGIN_X, 11);
+  u8g2.print("Cloud Sync");
+  gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
+  u8g2.setFont(MAIN_FONT);
+  u8g2.setCursor(MARGIN_X, 33);
+  u8g2.print("Connecting to WiFi...");
+  display.update();
+
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(g_wifiSsid.c_str(), g_wifiPass.c_str());
+
+  bool connected = false;
+  unsigned long startConn = millis();
+  while (millis() - startConn < 15000) {
+    if (WiFi.status() == WL_CONNECTED) {
+      connected = true;
+      break;
+    }
+    delay(200);
+  }
+
+  if (!connected) {
+    WiFi.disconnect(true, true);
+    return false;
+  }
+
+  u8g2.setCursor(MARGIN_X, 48);
+  u8g2.print("Syncing with server...");
+  display.update();
+
+  HTTPClient http;
+  String mac = WiFi.macAddress();
+  
+  // Register & Pairing
+  while (true) {
+    http.begin("http://pala.felixresch.com/api/device/register");
+    http.addHeader("Content-Type", "application/json");
+    int httpCode = http.POST("{\"mac_address\":\"" + mac + "\"}");
+    if (httpCode == 200) {
+      String payload = http.getString();
+      ALLOC_JSON_DOC(regDoc, 512);
+      DeserializationError err = deserializeJson(regDoc, payload);
+      if (!err && regDoc["status"] == "pairing") {
+        String code = regDoc["code"].as<String>();
+        gfx.fillScreen(1); // Clear screen
+        u8g2.setFont(BOLD_FONT);
+        u8g2.setCursor(MARGIN_X, 20);
+        u8g2.print("Device Pairing");
+        u8g2.setFont(MAIN_FONT);
+        u8g2.setCursor(MARGIN_X, 40);
+        u8g2.print("Go to Pala Cloud App");
+        u8g2.setCursor(MARGIN_X, 55);
+        u8g2.print("Enter code:");
+        u8g2.setFont(BOLD_FONT);
+        u8g2.setCursor(MARGIN_X, 75);
+        u8g2.print(code.c_str());
+        u8g2.setFont(MAIN_FONT);
+        u8g2.setCursor(MARGIN_X, 100);
+        u8g2.print("Click button to skip");
+        display.update();
+
+        unsigned long waitStart = millis();
+        bool skipped = false;
+        while (millis() - waitStart < 5000) {
+           if (digitalRead(BTN1) == LOW) { skipped = true; break; }
+           delay(50);
+        }
+        if (skipped) { http.end(); WiFi.disconnect(true, true); return false; }
+        http.end();
+        continue;
+      } else if (!err && regDoc["status"] == "ok") {
+        http.end();
+        break; // Registered!
+      }
+    }
+    http.end();
+    break; // Proceed or fail gracefully
+  }
+
+  gfx.fillScreen(1);
+  u8g2.setFont(BOLD_FONT);
+  u8g2.setCursor(MARGIN_X, 11);
+  u8g2.print("Cloud Sync");
+  gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
+  u8g2.setFont(MAIN_FONT);
+  u8g2.setCursor(MARGIN_X, 33);
+  u8g2.print("Syncing with server...");
+  display.update();
+  
+  // Pull
+  http.begin("http://pala.felixresch.com/api/sync/pull?mac=" + mac);
+  int httpCode = http.GET();
+  if (httpCode == 200) {
+    String payload = http.getString();
+ALLOC_JSON_DOC(doc, 1024);
+    DeserializationError error = deserializeJson(doc, payload);
+    if (!error) {
+      if (doc.containsKey("font_size")) {
+        int new_sz = doc["font_size"];
+        applyFontSize(new_sz);
+        prefs.putInt("cfg_font", new_sz);
+      }
+      if (doc.containsKey("sleep_timeout")) {
+         int new_slp = doc["sleep_timeout"];
+         g_sleepSecs = new_slp;
+         prefs.putInt("cfg_sleep", new_slp);
+         SLEEP_AFTER_MS = g_sleepSecs * 1000UL;
+      }
+      if (doc.containsKey("line_gap")) {
+         int new_gap = doc["line_gap"];
+         LINE_GAP = new_gap;
+         prefs.putInt("cfg_lgap", new_gap);
+         invalidateMetrics();
+      }
+      if (doc.containsKey("books")) {
+        JsonArray arr = doc["books"].as<JsonArray>();
+        for (JsonObject b : arr) {
+          int b_id = b["id"];
+          String b_title = b["title"].as<String>();
+          String safeTitle = sanitizeUploadedFilename(b_title);
+          if (!safeTitle.endsWith(".txt")) safeTitle += ".txt";
+          String fpath = "/reading/" + safeTitle;
+          if (!FS.exists(fpath)) {
+             u8g2.setCursor(MARGIN_X, 60);
+             u8g2.print("Downloading book...");
+             display.update();
+
+             HTTPClient httpDl;
+             httpDl.begin("http://pala.felixresch.com/api/book/" + String(b_id) + "?mac=" + mac);
+             int dlCode = httpDl.GET();
+             if (dlCode == 200) {
+               File f = FS.open(fpath, "w");
+               if (f) {
+                 httpDl.writeToStream(&f);
+                 f.close();
+               }
+             }
+             httpDl.end();
+          }
+        }
+      }
+    }
+  }
+  http.end();
+
+  // Push
+  http.begin("http://pala.felixresch.com/api/sync/push");
+  http.addHeader("Content-Type", "application/json");
+ALLOC_JSON_DOC(pushDoc, 1024);
+  pushDoc["mac_address"] = mac;
+if (HAS_BATTERY) {
+    pushDoc["battery_level"] = g_batPct;
+  } else {
+    pushDoc["battery_level"] = 100;
+  }
+  pushDoc["font_size"] = g_fontSize;
+  pushDoc["sleep_timeout"] = g_sleepSecs;
+  pushDoc["line_gap"] = LINE_GAP;
+  String pushPayload;
+  serializeJson(pushDoc, pushPayload);
+  http.POST(pushPayload);
+  http.end();
+
+  WiFi.disconnect(true, true);
+  return true;
+}
+
 void startUploadMode() {
   mode = MODE_UPLOAD;
   g_uploadStartMs = millis();
+
+  prepareMenuFrame();
+  
+  if (syncWithCloud()) {
+    stopUploadModeToLibrary();
+    return;
+  }
 
   prepareMenuFrame();
   u8g2.setFont(BOLD_FONT);
@@ -3302,9 +3504,6 @@ void drawSettings() {
         label = "Storage: " + String(pct) + "% (" + String(booksSize / 1024) + "K books, " + String(freeSize / 1024) + "K free)";
         break;
       }
-      case SET_ENTRY_OTA_SYNC:
-        label = "Cloud Sync & Update";
-        break;
     }
     drawMenuBulletRow(y, label, i == selectedSettingItem, i == selectedSettingItem);
     y += lineH;
@@ -3313,14 +3512,27 @@ void drawSettings() {
 }
 
 void handleModeSettings() {
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     selectedSettingItem++;
     if (selectedSettingItem >= SETTINGS_COUNT) selectedSettingItem = 1;
     drawSettings();
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.shortClick) {
+    selectedSettingItem--;
+    if (selectedSettingItem < 1) selectedSettingItem = SETTINGS_COUNT - 1;
+    drawSettings();
+    return;
+  }
+
+  if (btns.b2.doubleClick) {
+    mode = MODE_LIBRARY;
+    drawLibrary();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     switch (selectedSettingItem) {
       case SET_ENTRY_UPLOAD:
         startUploadMode();
@@ -3354,48 +3566,6 @@ void handleModeSettings() {
         break;
       case SET_ENTRY_MEMORY:
         // Double clicking storage redraws to refresh details
-        drawSettings();
-        break;
-      case SET_ENTRY_OTA_SYNC:
-        prepareMenuFrame();
-        u8g2.setFont(BOLD_FONT);
-        u8g2.setCursor(MARGIN_X, 11);
-        u8g2.print("Sync & OTA");
-        gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
-        u8g2.setFont(MAIN_FONT);
-        u8g2.setCursor(MARGIN_X, 33);
-        u8g2.print("Connecting to WiFi...");
-        display.update();
-        
-        if (WiFi.status() != WL_CONNECTED && g_wifiSsid.length() > 0) {
-            WiFi.mode(WIFI_STA);
-            WiFi.begin(g_wifiSsid.c_str(), g_wifiPass.c_str());
-            int retries = 0;
-            while(WiFi.status() != WL_CONNECTED && retries < 20) {
-                delay(500);
-                retries++;
-            }
-        }
-        
-        if(WiFi.status() == WL_CONNECTED) {
-            u8g2.setCursor(MARGIN_X, 47);
-            u8g2.print("Checking for Updates...");
-            display.update();
-            checkAndPerformOTA();
-            
-            u8g2.setCursor(MARGIN_X, 61);
-            u8g2.print("Syncing Books...");
-            display.update();
-            autoSyncBooks();
-            
-            u8g2.setCursor(MARGIN_X, 75);
-            u8g2.print("Done!");
-        } else {
-            u8g2.setCursor(MARGIN_X, 47);
-            u8g2.print("WiFi Failed.");
-        }
-        display.update();
-        delay(2000);
         drawSettings();
         break;
     }
@@ -3532,7 +3702,7 @@ void goToSleep() {
   Platform::prepareToSleep();
 
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN, 0);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN1, 0);
 
   if (rtc_inSpotifyScreensaver) {
     esp_sleep_enable_timer_wakeup(60ULL * 1000000ULL);
@@ -3551,10 +3721,10 @@ static inline void idleLightSleepMaybe() {
   if (btnQTail != btnQHead) return;
 
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN, 0);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN1, 0);
   esp_light_sleep_start();
 
-  while (digitalRead(BTN) == LOW) delay(5);
+  while (digitalRead(BTN1) == LOW) delay(5);
   delay(DEBOUNCE_MS + 5);
 }
 
@@ -4116,6 +4286,112 @@ void drawChessScreen() {
   display.update();
 }
 
+void performOTAUpdate() {
+  drawCenter("System Update", "Connecting to Wi-Fi...");
+  if (!connectSTAWithMulti()) {
+    drawCenter("System Update", "Wi-Fi failed. Press to exit.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  drawCenter("System Update", "Checking for update...");
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  
+  String url = "https://raw.githubusercontent.com/felix0123456/pala/main/update.json";
+  if (!http.begin(client, url)) {
+    drawCenter("System Update", "Failed to connect to server.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  int code = http.GET();
+  if (code != 200) {
+    http.end();
+    drawCenter("System Update", "Server error. Press to exit.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  String payload = http.getString();
+  http.end();
+  
+  ALLOC_JSON_DOC(doc, 1024);
+  DeserializationError err = deserializeJson(doc, payload);
+  if (err) {
+    drawCenter("System Update", "Parse error. Press to exit.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  String latestVer = doc["version"].as<String>();
+  String binUrl = doc["binUrl"].as<String>();
+  
+  if (latestVer == FW_VERSION) {
+    drawCenter("System Update", "Already on latest version.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  drawCenter("Downloading Update...", latestVer.c_str());
+  if (!http.begin(client, binUrl)) {
+    drawCenter("System Update", "Failed to open bin url.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  code = http.GET();
+  if (code != 200) {
+    http.end();
+    drawCenter("System Update", "Download error.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  int contentLength = http.getSize();
+  if (contentLength <= 0) {
+    http.end();
+    drawCenter("System Update", "Invalid file size.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  if (!Update.begin(contentLength, U_FLASH)) {
+    http.end();
+    drawCenter("System Update", "Not enough space.");
+    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+    exitSpotifyMode();
+    return;
+  }
+  
+  WiFiClient* stream = http.getStreamPtr();
+  size_t written = Update.writeStream(*stream);
+  
+  if (written == contentLength) {
+    if (Update.end()) {
+      drawCenter("System Update", "Success! Rebooting...");
+      delay(2000);
+      ESP.restart();
+    } else {
+      drawCenter("System Update", "Update failed.");
+    }
+  } else {
+    drawCenter("System Update", "Download interrupted.");
+  }
+  
+  while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
+  exitSpotifyMode();
+}
+
 void initChessGame() {
   markUserActivity();
   WiFi.mode(WIFI_STA);
@@ -4135,7 +4411,7 @@ void initChessGame() {
 
 void handleModeChess() {
   if (g_chessSubMode == CHESS_SUB_RESULT) {
-    if (btns.shortClick || btns.doubleClick) {
+    if (btns.b1.shortClick || btns.b1.doubleClick) {
       if (fetchChessPuzzle()) {
         g_chessSubMode = CHESS_SUB_PIECE_SEL;
         g_chessAvailablePiecesCount = getAvailablePieces(g_chessBoard, g_chessPlayerIsWhite, g_chessAvailablePieces);
@@ -4148,11 +4424,17 @@ void handleModeChess() {
       resetInputFrontend();
       return;
     }
+    if (btns.b2.doubleClick) {
+      mode = MODE_LIBRARY;
+      drawLibrary();
+      resetInputFrontend();
+      return;
+    }
     return;
   }
 
   if (g_chessSubMode == CHESS_SUB_PIECE_SEL) {
-    if (btns.shortClick) {
+    if (btns.b1.shortClick) {
       if (g_chessAvailablePiecesCount > 0) {
         g_chessSelectedPieceIdx++;
         if (g_chessSelectedPieceIdx >= g_chessAvailablePiecesCount) {
@@ -4163,7 +4445,7 @@ void handleModeChess() {
       return;
     }
 
-    if (btns.longClick) { // Cycle back
+    if (btns.b1.longClick) { // Cycle back
       if (g_chessAvailablePiecesCount > 0) {
         g_chessSelectedPieceIdx--;
         if (g_chessSelectedPieceIdx < 0) {
@@ -4174,7 +4456,25 @@ void handleModeChess() {
       return;
     }
 
-    if (btns.doubleClick) {
+    if (btns.b2.shortClick) { // Cycle back
+      if (g_chessAvailablePiecesCount > 0) {
+        g_chessSelectedPieceIdx--;
+        if (g_chessSelectedPieceIdx < 0) {
+          g_chessSelectedPieceIdx = g_chessAvailablePiecesCount - 1;
+        }
+        drawChessScreen();
+      }
+      return;
+    }
+
+    if (btns.b2.doubleClick) {
+      mode = MODE_LIBRARY;
+      drawLibrary();
+      resetInputFrontend();
+      return;
+    }
+
+    if (btns.b1.doubleClick) {
       if (g_chessAvailablePiecesCount > 0) {
         int r = g_chessAvailablePieces[g_chessSelectedPieceIdx].r;
         int c = g_chessAvailablePieces[g_chessSelectedPieceIdx].c;
@@ -4193,7 +4493,7 @@ void handleModeChess() {
   }
 
   else if (g_chessSubMode == CHESS_SUB_MOVE_SEL) {
-    if (btns.shortClick) {
+    if (btns.b1.shortClick) {
       g_chessSelectedMoveIdx++;
       if (g_chessSelectedMoveIdx >= g_chessPossibleMovesCount) {
         g_chessSubMode = CHESS_SUB_PIECE_SEL;
@@ -4202,7 +4502,7 @@ void handleModeChess() {
       return;
     }
 
-    if (btns.longClick) { // Cycle backward
+    if (btns.b1.longClick) { // Cycle backward
       g_chessSelectedMoveIdx--;
       if (g_chessSelectedMoveIdx < 0) {
         g_chessSubMode = CHESS_SUB_PIECE_SEL; // Cycle back past 0 returns to piece selection
@@ -4211,7 +4511,22 @@ void handleModeChess() {
       return;
     }
 
-    if (btns.doubleClick) {
+    if (btns.b2.shortClick) { // Cycle backward
+      g_chessSelectedMoveIdx--;
+      if (g_chessSelectedMoveIdx < 0) {
+        g_chessSubMode = CHESS_SUB_PIECE_SEL; // Cycle back past 0 returns to piece selection
+      }
+      drawChessScreen();
+      return;
+    }
+
+    if (btns.b2.doubleClick) {
+      g_chessSubMode = CHESS_SUB_PIECE_SEL;
+      drawChessScreen();
+      return;
+    }
+
+    if (btns.b1.doubleClick) {
       ChessMove m = g_chessPossibleMoves[g_chessSelectedMoveIdx];
       String playerMove = String((char)('a' + m.c1)) + String((char)('8' - m.r1)) +
                           String((char)('a' + m.c2)) + String((char)('8' - m.r2));
@@ -4294,106 +4609,29 @@ void handleModeChess() {
 // ============================================================================
 //  Setup / Mode handlers / Loop
 // ============================================================================
-// --- OTA and Auto-Sync ---
-void checkAndPerformOTA() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
-  WiFiClientSecure client;
-  client.setInsecure(); // Since the server is HTTPS, we bypass certificate validation for simplicity here
-  
-  HTTPClient http;
-  String checkUrl = String(PALA_CLOUD_URL) + "/api/firmware/check?version=" + String(FIRMWARE_VERSION);
-  http.begin(client, checkUrl);
-  
-  int httpCode = http.GET();
-  if (httpCode == HTTP_CODE_OK) {
-    String payload = http.getString();
-    // Custom JSON parsing to avoid ArduinoJson library dependency
-    bool updateAvailable = false;
-    String downloadUrl = "";
-    
-    int upIdx = payload.indexOf("\"update_available\":");
-    if (upIdx != -1) {
-       updateAvailable = (payload.indexOf("true", upIdx) != -1 && payload.indexOf("true", upIdx) < upIdx + 25);
-    }
-    
-    if (updateAvailable) {
-       int urlIdx = payload.indexOf("\"download_url\":");
-       if (urlIdx != -1) {
-          int startQuote = payload.indexOf("\"", urlIdx + 15);
-          if (startQuote != -1) {
-             int endQuote = payload.indexOf("\"", startQuote + 1);
-             if (endQuote != -1) {
-                downloadUrl = String(PALA_CLOUD_URL) + payload.substring(startQuote + 1, endQuote);
-             }
-          }
-       }
-       
-      if (downloadUrl.length() > 0) {
-        Serial.println("Update available! Downloading from: " + downloadUrl);
-      
-      t_httpUpdate_return ret = httpUpdate.update(client, downloadUrl);
-      switch (ret) {
-        case HTTP_UPDATE_FAILED:
-          Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
-          break;
-        case HTTP_UPDATE_NO_UPDATES:
-          Serial.println("HTTP_UPDATE_NO_UPDATES");
-          break;
-        case HTTP_UPDATE_OK:
-          Serial.println("HTTP_UPDATE_OK - Device restarting!");
-          break;
-      }
-      }
-    } else {
-      Serial.println("Firmware is up to date.");
-    }
-  } else {
-    Serial.printf("OTA Check failed, error: %s\n", http.errorToString(httpCode).c_str());
-  }
-  http.end();
-}
-
-void autoSyncBooks() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
-  WiFiClientSecure client;
-  client.setInsecure();
-  
-  HTTPClient http;
-  // Use ESP32 MAC address as device ID
-  String mac = WiFi.macAddress();
-  mac.replace(":", "");
-  String syncUrl = String(PALA_CLOUD_URL) + "/api/sync?device_id=" + mac;
-  
-  http.begin(client, syncUrl);
-  int httpCode = http.GET();
-  if (httpCode == HTTP_CODE_OK) {
-    Serial.println("Sync complete.");
-    // Detailed book download logic will go here
-  }
-  http.end();
-}
-
 void setup() {
   Serial.begin(115200);
   delay(200);
 
   setCpuFrequencyMhz(240);
 
-  pinMode(BTN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(BTN), btnISR, CHANGE);
+  pinMode(BTN1, INPUT_PULLUP);
+  pinMode(BTN2, INPUT_PULLUP);
+  pinMode(BTN3, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BTN1), btnISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(BTN2), btnISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(BTN3), btnISR, CHANGE);
 
   u8g2.begin(gfx);
 
   invalidateMetrics();
   (void)getMetrics();
 
-#if HAS_BATTERY
-  adcSetupOnce();
-  pinMode(BAT_ADC_CTRL, INPUT);
-  updateBatteryCached(true);
-#endif
+  if (HAS_BATTERY) {
+    adcSetupOnce();
+    pinMode(BAT_ADC_CTRL, INPUT);
+    updateBatteryCached(true);
+  }
 
   display.fastmodeOff();
   display.clear();
@@ -4435,7 +4673,7 @@ void setup() {
       delay(50);
       esp_wifi_stop();
       esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-      esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN, 0);
+      esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN1, 0);
       esp_sleep_enable_timer_wakeup(60ULL * 1000000ULL);
       esp_deep_sleep_start();
     } else {
@@ -4464,7 +4702,7 @@ void setup() {
       }
       drawClockScreen();
       esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-      esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN, 0);
+      esp_sleep_enable_ext0_wakeup((gpio_num_t)BTN1, 0);
       esp_sleep_enable_timer_wakeup(10ULL * 60ULL * 1000000ULL);
       esp_deep_sleep_start();
     } else {
@@ -4495,6 +4733,8 @@ void setup() {
   }
 
   if (!restored) {
+    syncWithCloud();
+    loadBooks();
     drawLibrary();
     resetInputFrontend();
   }
@@ -4503,43 +4743,60 @@ void setup() {
 static void handleModeUpload() {
   server.handleClient();
   bool timeout = (uint32_t)(millis() - g_uploadStartMs) > UPLOAD_AUTO_EXIT_MS;
-  if (btns.shortClick || timeout) stopUploadModeToLibrary();
+  if (btns.b1.shortClick || timeout) stopUploadModeToLibrary();
 }
 
 static void handleModeAbout() {
-  if (btns.shortClick || btns.doubleClick || btns.longClick || btns.quadClick) {
+  if (btns.b1.shortClick || btns.b1.doubleClick || btns.b1.longClick || btns.b1.quadClick) {
     mode = MODE_SETTINGS;
     drawSettings();
+  }
+  if (btns.b2.doubleClick || btns.b2.shortClick) {
+    mode = MODE_LIBRARY;
+    drawLibrary();
   }
 }
 
 static void handleModeBookmarkBookSelect() {
   if (bookCount == 0) {
-    if (btns.anyClick()) {
+    if (btns.b1.anyClick()) {
       mode = MODE_LIBRARY;
       drawLibrary();
     }
     return;
   }
 
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     bmBookIndex++;
     if (bmBookIndex >= bookCount) bmBookIndex = 0;
     drawBookmarksBookSelect();
     return;
   }
 
-  if (btns.longClick) {
+  if (btns.b1.longClick) {
     bmBookIndex--;
     if (bmBookIndex < 0) bmBookIndex = bookCount - 1;
     drawBookmarksBookSelect();
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.shortClick) {
+    bmBookIndex--;
+    if (bmBookIndex < 0) bmBookIndex = bookCount - 1;
+    drawBookmarksBookSelect();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     bmSelIndex = 0;
     mode = MODE_BM_LIST;
     drawBookmarksList();
+  }
+
+  if (btns.b2.doubleClick) {
+    mode = MODE_LIBRARY;
+    drawLibrary();
+    return;
   }
 }
 
@@ -4548,7 +4805,7 @@ static void handleModeBookmarkList() {
   bmCount = loadBookmarksForKey(key, bmPages);
   if (bmSelIndex >= (int)bmCount) bmSelIndex = max(0, (int)bmCount - 1);
 
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     if (bmCount > 0) {
       bmSelIndex++;
       if (bmSelIndex >= (int)bmCount) bmSelIndex = 0;
@@ -4557,7 +4814,16 @@ static void handleModeBookmarkList() {
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.shortClick) {
+    if (bmCount > 0) {
+      bmSelIndex--;
+      if (bmSelIndex < 0) bmSelIndex = bmCount - 1;
+    }
+    drawBookmarksList();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     if (bmCount == 0) return;
 
     String previewPath = String(books[bmBookIndex].path);
@@ -4581,10 +4847,16 @@ static void handleModeBookmarkList() {
     }
     return;
   }
+
+  if (btns.b2.doubleClick) {
+    mode = MODE_BM_BOOK_SELECT;
+    drawBookmarksBookSelect();
+    return;
+  }
 }
 
 static void handleModeBookmarkPreview() {
-  if (btns.tripleClick) {
+  if (btns.b1.tripleClick) {
     bmPreviewActive = false;
     pageIndex = bmPreviewSavedPage;
     mode = MODE_READER;
@@ -4592,7 +4864,7 @@ static void handleModeBookmarkPreview() {
     return;
   }
 
-  if (btns.longClick) {
+  if (btns.b1.longClick) {
     bmPreviewActive = false;
     saveProgressThrottled(true);
     mode = MODE_READER;
@@ -4600,7 +4872,15 @@ static void handleModeBookmarkPreview() {
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.doubleClick) {
+    bmPreviewActive = false;
+    pageIndex = bmPreviewSavedPage;
+    mode = MODE_READER;
+    renderCurrentPage();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     pageIndex--;
     if (pageIndex < 0) pageIndex = 0;
     pageTurnsSinceFull++;
@@ -4608,7 +4888,15 @@ static void handleModeBookmarkPreview() {
     return;
   }
 
-  if (btns.shortClick) {
+  if (btns.b2.shortClick) {
+    pageIndex--;
+    if (pageIndex < 0) pageIndex = 0;
+    pageTurnsSinceFull++;
+    renderCurrentPage();
+    return;
+  }
+
+  if (btns.b1.shortClick) {
     pageIndex++;
     ensureOffsetsUpTo(pageIndex);
     if (eofReached && pageIndex >= knownPages) pageIndex = knownPages - 1;
@@ -4622,14 +4910,28 @@ static void handleModeLibrary() {
   buildLibraryEntries();
   int totalItems = libraryEntryCount;
 
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     selectedItem++;
     if (selectedItem >= totalItems) selectedItem = 0;
     drawLibrary();
     return;
   }
 
-  if (!btns.doubleClick) return;
+  if (btns.b2.shortClick) {
+    selectedItem--;
+    if (selectedItem < 0) selectedItem = totalItems - 1;
+    drawLibrary();
+    return;
+  }
+
+  if (btns.b2.doubleClick) {
+    currentLibraryFolder = folderParent(currentLibraryFolder);
+    selectedItem = 0;
+    drawLibrary();
+    return;
+  }
+
+  if (!btns.b1.doubleClick) return;
 
   if (selectedItem < 0 || selectedItem >= libraryEntryCount) {
     drawLibrary();
@@ -4728,7 +5030,7 @@ void jumpBookOffset(int percentChange) {
 }
 
 static void handleModeReader() {
-  if (btns.quadClick) {
+  if (btns.b1.quadClick) {
     g_jumpModeActive = !g_jumpModeActive;
     pageTurnsSinceFull++;
     renderCurrentPage();
@@ -4736,20 +5038,20 @@ static void handleModeReader() {
   }
 
   if (g_jumpModeActive) {
-    if (btns.longClick) {
+    if (btns.b1.longClick) {
       // Hold in jump mode switches to Chapter Selection Menu!
       mode = MODE_CHAPTER_LIST;
       g_selectedChapterIdx = 0;
       drawChapterList();
       return;
     }
-    if (btns.doubleClick) {
+    if (btns.b1.doubleClick) {
       jumpBookOffset(-10);
       pageTurnsSinceFull++;
       renderCurrentPage();
       return;
     }
-    if (btns.shortClick) {
+    if (btns.b1.shortClick) {
       jumpBookOffset(10);
       pageTurnsSinceFull++;
       renderCurrentPage();
@@ -4758,7 +5060,7 @@ static void handleModeReader() {
     return;
   }
 
-  if (btns.longClick) {
+  if (btns.b1.longClick) {
     const char* msg = addBookmarkForCurrentBook();
     if (msg) showToast(msg);
     pageTurnsSinceFull++;
@@ -4766,7 +5068,13 @@ static void handleModeReader() {
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.doubleClick) {
+    enterLibraryRoot(true);
+    resetInputFrontend();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     if (pageIndex > 0) pageIndex--;
     saveProgressThrottled(false);
     pageTurnsSinceFull++;
@@ -4774,7 +5082,15 @@ static void handleModeReader() {
     return;
   }
 
-  if (btns.shortClick) {
+  if (btns.b2.shortClick) {
+    if (pageIndex > 0) pageIndex--;
+    saveProgressThrottled(false);
+    pageTurnsSinceFull++;
+    renderCurrentPage();
+    return;
+  }
+
+  if (btns.b1.shortClick) {
     int oldPage = pageIndex;
     pageIndex++;
     ensureOffsetsUpTo(pageIndex);
@@ -4810,15 +5126,18 @@ void handleModeSpotify() {
     }
   }
 
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     spotifyNextTrack();
     g_spotifyForceRefresh = true;
   }
-  else if (btns.doubleClick) {
+  else if (btns.b1.doubleClick || btns.b2.shortClick) {
     spotifyPrevTrack();
     g_spotifyForceRefresh = true;
   }
-  else if (btns.longClick) {
+  else if (btns.b2.doubleClick) {
+    exitSpotifyMode();
+  }
+  else if (btns.b1.longClick) {
     SpotifyTrackInfo track = getSpotifyCurrentlyPlaying();
     spotifyTogglePlayPause(track.isPlaying);
     g_spotifyForceRefresh = true;
@@ -4920,7 +5239,7 @@ void drawTodoList() {
 }
 
 void handleModeTodo() {
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     if (g_todoCount > 0) {
       g_todoSelectedIdx++;
       if (g_todoSelectedIdx >= g_todoCount) g_todoSelectedIdx = 0;
@@ -4929,7 +5248,22 @@ void handleModeTodo() {
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.shortClick) {
+    if (g_todoCount > 0) {
+      g_todoSelectedIdx--;
+      if (g_todoSelectedIdx < 0) g_todoSelectedIdx = g_todoCount - 1;
+      drawTodoList();
+    }
+    return;
+  }
+
+  if (btns.b2.doubleClick) {
+    mode = MODE_LIBRARY;
+    drawLibrary();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     if (g_todoCount > 0) {
       g_todoItems[g_todoSelectedIdx].checked = !g_todoItems[g_todoSelectedIdx].checked;
       saveTodoList();
@@ -5155,10 +5489,14 @@ void drawCalendarScreen() {
 }
 
 void handleModeCalendar() {
-  if (btns.shortClick || btns.doubleClick) {
+  if (btns.b1.shortClick || btns.b1.doubleClick) {
     drawCenter("Calendar", "Updating events...");
     fetchGoogleCalendar();
     drawCalendarScreen();
+  }
+  if (btns.b2.doubleClick || btns.b2.shortClick) {
+    mode = MODE_LIBRARY;
+    drawLibrary();
   }
 }
 
@@ -5285,7 +5623,7 @@ void drawChapterList() {
 }
 
 void handleModeChapterList() {
-  if (btns.shortClick) {
+  if (btns.b1.shortClick) {
     if (g_chapterCount > 0) {
       g_selectedChapterIdx++;
       if (g_selectedChapterIdx >= g_chapterCount) g_selectedChapterIdx = 0;
@@ -5294,14 +5632,30 @@ void handleModeChapterList() {
     return;
   }
 
-  if (btns.doubleClick) {
+  if (btns.b2.shortClick) {
+    if (g_chapterCount > 0) {
+      g_selectedChapterIdx--;
+      if (g_selectedChapterIdx < 0) g_selectedChapterIdx = g_chapterCount - 1;
+      drawChapterList();
+    }
+    return;
+  }
+
+  if (btns.b2.doubleClick) {
+    mode = MODE_READER;
+    g_jumpModeActive = true;
+    renderCurrentPage();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
     if (g_chapterCount > 0) {
       jumpToChapter(g_selectedChapterIdx);
     }
     return;
   }
 
-  if (btns.longClick) {
+  if (btns.b1.longClick) {
     mode = MODE_READER;
     g_jumpModeActive = true;
     renderCurrentPage();
@@ -5467,10 +5821,10 @@ void loop() {
     g_isrDropCount = 0;
     interrupts();
     clearButtonQueue();
-    btns.resetState();
+    btns.b1.resetState();
   }
 
-  if (btns.anyClick()) {
+  if (btns.b1.anyClick()) {
     markUserActivity();
   }
 
@@ -5505,13 +5859,13 @@ void loop() {
     }
   }
 
-  if (btns.tripleClick && mode == MODE_UPLOAD) {
+  if (btns.b1.tripleClick && mode == MODE_UPLOAD) {
     stopUploadModeToLibrary();
     return;
   }
 
   // Universal triple click back handler
-  if (btns.tripleClick && mode != MODE_UPLOAD && mode != MODE_BM_PREVIEW) {
+  if (btns.b1.tripleClick && mode != MODE_UPLOAD && mode != MODE_BM_PREVIEW) {
     if (mode == MODE_SPOTIFY) {
       exitSpotifyMode();
     } else if (mode == MODE_CHESS) {
@@ -5607,3 +5961,4 @@ void loop() {
       break;
   }
 }
+
