@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="flex-between" style="margin-bottom: 24px;">
+        <div>
+            <h2>Apps on {{ device.name }}</h2>
+            <p class="muted">Check to Show, Uncheck to Hide</p>
+        </div>
+        <a href="/device/{{ device.mac_address }}" class="nav-btn" style="display:inline-block; padding: 8px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">Back to Device</a>
+    </div>
+
+    <form method="POST" action="/device/{{ device.mac_address }}/apps" class="stack" style="max-width: 500px;">
+        <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--border); cursor: pointer;">
+            <input type="checkbox" name="app_todo" value="true" {% if device.app_todo %}checked{% endif %}>
+            <span style="font-size: 16px;">Todo List</span>
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--border); cursor: pointer;">
+            <input type="checkbox" name="app_cal" value="true" {% if device.app_cal %}checked{% endif %}>
+            <span style="font-size: 16px;">Calendar</span>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--border); cursor: pointer;">
+            <input type="checkbox" name="app_spot" value="true" {% if device.app_spot %}checked{% endif %}>
+            <span style="font-size: 16px;">Spotify</span>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--border); cursor: pointer;">
+            <input type="checkbox" name="app_chess" value="true" {% if device.app_chess %}checked{% endif %}>
+            <span style="font-size: 16px;">Chess</span>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--border); cursor: pointer;">
+            <input type="checkbox" name="app_pom" value="true" {% if device.app_pom %}checked{% endif %}>
+            <span style="font-size: 16px;">Pomodoro Timer</span>
+        </label>
+
+        <button type="submit" style="margin-top: 16px;">Save App Settings</button>
+    </form>
+</div>
+{% endblock %}

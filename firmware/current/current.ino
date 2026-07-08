@@ -37,10 +37,16 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.10.0"
+#define FW_VERSION "1.11.0"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
+
+bool g_appTodo = true;
+bool g_appCal = true;
+bool g_appSpot = true;
+bool g_appChess = true;
+bool g_appPom = true;
 
 // ---------------------- Multi-WiFi Configuration ----------------------
 static const int MAX_WIFI_PROFILES = 5;
@@ -544,6 +550,12 @@ static void loadSettings() {
   }
   g_calUrl = prefs.getString("cfg_cal_url", "");
   g_timezoneOffsetHours = prefs.getInt("cfg_tz_offset", 2);
+
+  g_appTodo = prefs.getBool("cfg_app_todo", true);
+  g_appCal = prefs.getBool("cfg_app_cal", true);
+  g_appSpot = prefs.getBool("cfg_app_spot", true);
+  g_appChess = prefs.getBool("cfg_app_chess", true);
+  g_appPom = prefs.getBool("cfg_app_pom", true);
 
   invalidateMetrics();
 }
@@ -1609,27 +1621,27 @@ static void buildLibraryEntries() {
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
   }
-  if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
+  if (g_appTodo && libraryEntryCount < MAX_LIBRARY_ENTRIES) {
     libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_TODO;
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
   }
-  if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
+  if (g_appCal && libraryEntryCount < MAX_LIBRARY_ENTRIES) {
     libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_CALENDAR;
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
   }
-  if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
+  if (g_appSpot && libraryEntryCount < MAX_LIBRARY_ENTRIES) {
     libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_SPOTIFY;
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
   }
-  if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
+  if (g_appChess && libraryEntryCount < MAX_LIBRARY_ENTRIES) {
     libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_CHESS;
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
   }
-  if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
+  if (g_appPom && libraryEntryCount < MAX_LIBRARY_ENTRIES) {
     libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_POMODORO;
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
@@ -3417,11 +3429,36 @@ bool syncWithCloud() {
          String curl = doc["cal_url"].as<String>();
          g_calUrl = curl;
          prefs.putString("cfg_cal_url", curl);
-      }
-      if (doc.containsKey("tz_offset")) {
-         int tzo = doc["tz_offset"];
-         g_timezoneOffsetHours = tzo;
-         prefs.putInt("cfg_tz_offset", tzo);
+        if (doc.containsKey("tz_offset")) {
+          int tzo = doc["tz_offset"];
+          g_timezoneOffsetHours = tzo;
+          prefs.putInt("cfg_tz_offset", tzo);
+       }
+       if (doc.containsKey("app_todo")) {
+          bool val = doc["app_todo"];
+          g_appTodo = val;
+          prefs.putBool("cfg_app_todo", val);
+       }
+       if (doc.containsKey("app_cal")) {
+          bool val = doc["app_cal"];
+          g_appCal = val;
+          prefs.putBool("cfg_app_cal", val);
+       }
+       if (doc.containsKey("app_spot")) {
+          bool val = doc["app_spot"];
+          g_appSpot = val;
+          prefs.putBool("cfg_app_spot", val);
+       }
+       if (doc.containsKey("app_chess")) {
+          bool val = doc["app_chess"];
+          g_appChess = val;
+          prefs.putBool("cfg_app_chess", val);
+       }
+       if (doc.containsKey("app_pom")) {
+          bool val = doc["app_pom"];
+          g_appPom = val;
+          prefs.putBool("cfg_app_pom", val);
+       }
       }
 
       if (doc.containsKey("bookmarks")) {

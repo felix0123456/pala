@@ -136,6 +136,11 @@
                 <a href='/library' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#128218;</span> Library & Uploader</div>
                 </a>
+                {% if device or (user.devices and user.devices|length > 0) %}
+                <a href='/device/{{ device.mac_address if device else user.devices[0].mac_address }}/apps' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128241;</span> Apps</div>
+                </a>
+                {% endif %}
                 {% if user.is_admin %}
                 <a href='/admin' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#9881;</span> Admin Dashboard</div>

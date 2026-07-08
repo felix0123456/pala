@@ -42,6 +42,12 @@ class Device(Base):
     chess_elo = Column(Integer, nullable=True)
     cal_url = Column(String, nullable=True)
     tz_offset = Column(Integer, default=0)
+    
+    app_todo = Column(Boolean, default=True)
+    app_cal = Column(Boolean, default=True)
+    app_spot = Column(Boolean, default=True)
+    app_chess = Column(Boolean, default=True)
+    app_pom = Column(Boolean, default=True)
 
     owner = relationship("User", back_populates="devices")
     bookmarks = relationship("Bookmark", back_populates="device")

@@ -50,7 +50,12 @@ with engine.connect() as conn:
         "chess_elo INTEGER DEFAULT 1500",
         "cal_url VARCHAR",
         "tz_offset INTEGER DEFAULT 0",
-        "firmware_version VARCHAR"
+        "firmware_version VARCHAR",
+        "app_todo BOOLEAN DEFAULT TRUE",
+        "app_cal BOOLEAN DEFAULT TRUE",
+        "app_spot BOOLEAN DEFAULT TRUE",
+        "app_chess BOOLEAN DEFAULT TRUE",
+        "app_pom BOOLEAN DEFAULT TRUE"
     ]
     for col in new_columns:
         try:
@@ -276,17 +281,58 @@ async def update_device_chess(
 
 @app.post("/device/{mac_address}/rename")
 async def rename_device(mac_address: str, name: str = Form(...), request: Request = None, db: Session = Depends(get_db)):
+    if not request or "session_token" not in request.cookies:
+        return RedirectResponse("/login", status_code=303)
     user = auth.get_current_user(request, db)
     if not user:
-        raise HTTPException(status_code=401)
+        return RedirectResponse("/login", status_code=303)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if device:
+        device.name = name
+        db.commit()
+    return RedirectResponse(f"/device/{mac_address}", status_code=303)
+
+@app.get("/device/{mac_address}/apps")
+async def device_apps_view(request: Request, mac_address: str, db: Session = Depends(get_db)):
+    if "session_token" not in request.cookies:
+        return RedirectResponse("/login", status_code=303)
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if not device:
-        raise HTTPException(status_code=404)
-    device.name = name
-    db.commit()
-    return RedirectResponse(url="/devices", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse("/devices", status_code=303)
+    return templates.TemplateResponse("apps.html", {"request": request, "user": user, "device": device})
 
-@app.post("/device/{mac_address}/toggle_sync/{book_id}")
+@app.post("/device/{mac_address}/apps")
+async def update_device_apps(
+    mac_address: str, 
+    request: Request, 
+    app_todo: bool = Form(False),
+    app_cal: bool = Form(False),
+    app_spot: bool = Form(False),
+    app_chess: bool = Form(False),
+    app_pom: bool = Form(False),
+    db: Session = Depends(get_db)
+):
+    if "session_token" not in request.cookies:
+        return RedirectResponse("/login", status_code=303)
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        return RedirectResponse("/devices", status_code=303)
+        
+    device.app_todo = app_todo
+    device.app_cal = app_cal
+    device.app_spot = app_spot
+    device.app_chess = app_chess
+    device.app_pom = app_pom
+    db.commit()
+    return RedirectResponse(f"/device/{mac_address}/apps", status_code=303)
+
+@app.post("/device/{mac_address}/sync/{book_id}")
 async def toggle_device_sync(mac_address: str, book_id: int, request: Request, db: Session = Depends(get_db)):
     user = auth.get_current_user(request, db)
     if not user:
@@ -615,8 +661,12 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
     
     # Return settings and explicitly synced books
     books_data = [{"id": b.id, "title": b.title} for b in device.synced_books]
-
-    return {
+    bookmarks_data = [
+        {"book_id": bm.book_id, "title": bm.book.title, "page_index": bm.page_index} 
+        for bm in device.bookmarks if bm.book
+    ]
+    
+    resp = {
         "font_size": device.font_size,
         "sleep_timeout": device.sleep_timeout,
         "line_gap": device.line_gap,
@@ -627,13 +677,15 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         "spotify_refresh_token": device.spotify_refresh_token,
         "spotify_screensaver": device.spotify_screensaver,
         "chess_elo": device.chess_elo,
-        "cal_url": device.cal_url,
+        "cal_url": device.cal_url or "",
         "tz_offset": device.tz_offset,
+        "app_todo": device.app_todo,
+        "app_cal": device.app_cal,
+        "app_spot": device.app_spot,
+        "app_chess": device.app_chess,
+        "app_pom": device.app_pom,
         "books": books_data,
-        "bookmarks": [
-            {"book_id": bm.book_id, "title": bm.book.title, "page_index": bm.page_index} 
-            for bm in device.bookmarks if bm.book
-        ],
+        "bookmarks": bookmarks_data,
         "todos": [
             {"id": t.id, "text": t.text, "checked": t.checked}
             for t in device.owner.todos
