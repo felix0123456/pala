@@ -129,6 +129,7 @@
                         <th>Pairing Code</th>
                         <th>Owner ID</th>
                         <th>Settings</th>
+                        <th>Firmware Version</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -147,6 +148,13 @@
                         <td style="font-size: 12px; color: var(--text-muted);">
                             Bat: {{ d.battery_level }}% | Font: {{ d.font_size }}<br>
                             Sleep: {{ d.sleep_timeout }}s | Gap: {{ d.line_gap }}
+                        </td>
+                        <td>
+                            {% if d.firmware_version %}
+                                <span class="badge">{{ d.firmware_version }}</span>
+                            {% else %}
+                                <span class="muted" style="font-size: 12px;">Unknown</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if d.user_id %}

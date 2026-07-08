@@ -26,6 +26,7 @@ class Device(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     pairing_code = Column(String, index=True, nullable=True)
     battery_level = Column(Integer, default=100)
+    firmware_version = Column(String, nullable=True)
     
     font_size = Column(Integer, default=10)
     sleep_timeout = Column(Integer, default=120)

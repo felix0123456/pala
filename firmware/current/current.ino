@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.8.2"
+#define FW_VERSION "1.9.3"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3283,6 +3283,7 @@ bool syncWithCloud() {
   // Register & Pairing
   bool alreadyRegistered = false;
   bool gotCode = false;
+  String pairingCode = "";
   while (true) {
     http.begin(client, "http://pala.felixresch.com/api/device/register");
     http.addHeader("Content-Type", "application/json");
@@ -3292,24 +3293,26 @@ bool syncWithCloud() {
       ALLOC_JSON_DOC(regDoc, 512);
       DeserializationError err = deserializeJson(regDoc, payload);
       if (!err && regDoc["status"] == "pairing") {
-        gotCode = true;
-        String code = regDoc["code"].as<String>();
-        prepareMenuFrame();
-        u8g2.setFont(BOLD_FONT);
-        u8g2.setCursor(MARGIN_X, 20);
-        u8g2.print("Device Pairing");
-        u8g2.setFont(MAIN_FONT);
-        u8g2.setCursor(MARGIN_X, 40);
-        u8g2.print("Go to Pala Cloud App");
-        u8g2.setCursor(MARGIN_X, 55);
-        u8g2.print("Enter code:");
-        u8g2.setFont(BOLD_FONT);
-        u8g2.setCursor(MARGIN_X, 75);
-        u8g2.print(code.c_str());
-        u8g2.setFont(MAIN_FONT);
-        u8g2.setCursor(MARGIN_X, 100);
-        u8g2.print("Click button to skip");
-        display.update();
+        if (!gotCode) {
+          gotCode = true;
+          pairingCode = regDoc["code"].as<String>();
+          prepareMenuFrame();
+          u8g2.setFont(BOLD_FONT);
+          u8g2.setCursor(MARGIN_X, 20);
+          u8g2.print("Device Pairing");
+          u8g2.setFont(MAIN_FONT);
+          u8g2.setCursor(MARGIN_X, 40);
+          u8g2.print("Go to Pala Cloud App");
+          u8g2.setCursor(MARGIN_X, 55);
+          u8g2.print("Enter code:");
+          u8g2.setFont(BOLD_FONT);
+          u8g2.setCursor(MARGIN_X, 75);
+          u8g2.print(pairingCode.c_str());
+          u8g2.setFont(MAIN_FONT);
+          u8g2.setCursor(MARGIN_X, 100);
+          u8g2.print("Click button to skip");
+          display.update();
+        }
 
         unsigned long waitStart = millis();
         bool skipped = false;
@@ -3390,12 +3393,70 @@ bool syncWithCloud() {
          prefs.putInt("cfg_lgap", new_gap);
          invalidateMetrics();
       }
+      if (doc.containsKey("screensaver_mode")) {
+         int mode = doc["screensaver_mode"];
+         g_screensaverMode = mode;
+         prefs.putInt("cfg_scr_mode", mode);
+      }
+      if (doc.containsKey("invert_display")) {
+         bool inv = doc["invert_display"];
+         g_nightMode = inv;
+         prefs.putBool("cfg_invert", inv);
+      }
+      if (doc.containsKey("spotify_client_id")) {
+         String sid = doc["spotify_client_id"].as<String>();
+         g_spotifyClientId = sid;
+         prefs.putString("spot_id", sid);
+      }
+      if (doc.containsKey("spotify_client_secret")) {
+         String ssec = doc["spotify_client_secret"].as<String>();
+         g_spotifyClientSecret = ssec;
+         prefs.putString("spot_secret", ssec);
+      }
+      if (doc.containsKey("spotify_refresh_token")) {
+         String sref = doc["spotify_refresh_token"].as<String>();
+         g_spotifyRefreshToken = sref;
+         prefs.putString("spot_refresh", sref);
+      }
+      if (doc.containsKey("spotify_screensaver")) {
+         bool sscr = doc["spotify_screensaver"];
+         g_spotifyScreensaver = sscr;
+         prefs.putBool("spot_scr", sscr);
+      }
+      if (doc.containsKey("chess_elo")) {
+         int elo = doc["chess_elo"];
+         g_chessElo = elo;
+         prefs.putInt("cfg_chess_elo", elo);
+      }
+      if (doc.containsKey("cal_url")) {
+         String curl = doc["cal_url"].as<String>();
+         g_calUrl = curl;
+         prefs.putString("cfg_cal_url", curl);
+      }
+      if (doc.containsKey("tz_offset")) {
+         int tzo = doc["tz_offset"];
+         g_timezoneOffsetHours = tzo;
+         prefs.putInt("cfg_tz_offset", tzo);
+      }
+
+      if (doc.containsKey("bookmarks")) {
+         JsonArray bms = doc["bookmarks"].as<JsonArray>();
+         for (JsonObject bm : bms) {
+           String bm_title = bm["title"].as<String>();
+           String bmSafe = sanitizeUploadedFilename(bm_title);
+           int bm_page = bm["page_index"];
+           prefs.putInt((bmSafe + "_p").c_str(), bm_page);
+         }
+      }
+
       if (doc.containsKey("books")) {
         JsonArray arr = doc["books"].as<JsonArray>();
         for (JsonObject b : arr) {
           int b_id = b["id"];
           String b_title = b["title"].as<String>();
           String safeTitle = sanitizeUploadedFilename(b_title);
+          prefs.putInt((safeTitle + "_id").c_str(), b_id);
+          
           if (!safeTitle.endsWith(".txt")) safeTitle += ".txt";
           String fpath = "/reading/" + safeTitle;
           if (!FS.exists(fpath)) {
@@ -3425,8 +3486,9 @@ bool syncWithCloud() {
   // Push
   http.begin(client, "http://pala.felixresch.com/api/sync/push");
   http.addHeader("Content-Type", "application/json");
-  ALLOC_JSON_DOC(pushDoc, 1024);
+  ALLOC_JSON_DOC(pushDoc, 2048);
   pushDoc["mac_address"] = mac;
+  pushDoc["firmware_version"] = FW_VERSION;
   if (HAS_BATTERY) {
     pushDoc["battery_level"] = g_batPct;
   } else {
@@ -3435,6 +3497,39 @@ bool syncWithCloud() {
   pushDoc["font_size"] = g_fontSize;
   pushDoc["sleep_timeout"] = g_sleepSecs;
   pushDoc["line_gap"] = LINE_GAP;
+  
+  pushDoc["screensaver_mode"] = g_screensaverMode;
+  pushDoc["invert_display"] = g_nightMode;
+  if (g_spotifyClientId.length() > 0) pushDoc["spotify_client_id"] = g_spotifyClientId;
+  if (g_spotifyClientSecret.length() > 0) pushDoc["spotify_client_secret"] = g_spotifyClientSecret;
+  if (g_spotifyRefreshToken.length() > 0) pushDoc["spotify_refresh_token"] = g_spotifyRefreshToken;
+  pushDoc["spotify_screensaver"] = g_spotifyScreensaver;
+  pushDoc["chess_elo"] = g_chessElo;
+  if (g_calUrl.length() > 0) pushDoc["cal_url"] = g_calUrl;
+  pushDoc["tz_offset"] = g_timezoneOffsetHours;
+
+  JsonArray pushBookmarks = pushDoc.createNestedArray("bookmarks");
+  File root = FS.open("/reading");
+  if (root && root.isDirectory()) {
+    File file = root.openNextFile();
+    while (file) {
+      if (!file.isDirectory()) {
+        String fname = file.name();
+        if (fname.endsWith(".txt")) {
+           String key = fname.substring(0, fname.length() - 4);
+           int progress = prefs.getInt((key + "_p").c_str(), -1);
+           int b_id = prefs.getInt((key + "_id").c_str(), -1);
+           if (progress >= 0 && b_id != -1) {
+             JsonObject bmObj = pushBookmarks.createNestedObject();
+             bmObj["book_id"] = b_id;
+             bmObj["page_index"] = progress;
+           }
+        }
+      }
+      file = root.openNextFile();
+    }
+  }
+
   String pushPayload;
   serializeJson(pushDoc, pushPayload);
   http.POST(pushPayload);

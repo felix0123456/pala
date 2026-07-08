@@ -480,6 +480,7 @@ class SyncPushData(BaseModel):
     chess_elo: Optional[int] = None
     cal_url: Optional[str] = None
     tz_offset: Optional[int] = None
+    firmware_version: Optional[str] = None
 
 @app.post("/api/device/register")
 async def register_device(data: DeviceRegister, db: Session = Depends(get_db)):
@@ -519,6 +520,7 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
     if data.chess_elo is not None: device.chess_elo = data.chess_elo
     if data.cal_url is not None: device.cal_url = data.cal_url
     if data.tz_offset is not None: device.tz_offset = data.tz_offset
+    if data.firmware_version is not None: device.firmware_version = data.firmware_version
 
     # Update bookmarks
     for bm in data.bookmarks:
@@ -561,7 +563,11 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         "chess_elo": device.chess_elo,
         "cal_url": device.cal_url,
         "tz_offset": device.tz_offset,
-        "books": books_data
+        "books": books_data,
+        "bookmarks": [
+            {"book_id": bm.book_id, "title": bm.book.title, "page_index": bm.page_index} 
+            for bm in device.bookmarks if bm.book
+        ]
     }
 
 @app.get("/api/book/{book_id}")
