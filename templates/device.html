@@ -1,83 +1,408 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card" style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-    <a href="/" style="text-decoration: none; font-size: 24px; color: var(--text-muted);">&larr; Home</a>
-    <h2 style="margin: 0;">Device: {{ device.name }} ({{ device.mac_address }})</h2>
-</div>
-
-<div class="card">
-    <h2>Device Settings</h2>
-    <p class="muted">Changes will be synced to your Pala when it next connects to the internet.</p>
-    <form action="/api/device/{{ device.mac_address }}/settings" method="POST" class="stack" id="device-settings-form">
-        <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-            <div>
-                <label>Font Size</label>
-                <select name="font_size" id="setting-font" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text); border-radius: 8px;">
-                    <option value="8" {% if device.font_size == 8 %}selected{% endif %}>8px &mdash; tiny</option>
-                    <option value="10" {% if device.font_size == 10 %}selected{% endif %}>10px &mdash; small</option>
-                    <option value="12" {% if device.font_size == 12 %}selected{% endif %}>12px &mdash; medium</option>
-                    <option value="14" {% if device.font_size == 14 %}selected{% endif %}>14px &mdash; large</option>
-                </select>
-            </div>
-            <div>
-                <label>Auto-Sleep after</label>
-                <select name="sleep_timeout" id="setting-sleep" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text); border-radius: 8px;">
-                    <option value="30" {% if device.sleep_timeout == 30 %}selected{% endif %}>30 seconds</option>
-                    <option value="60" {% if device.sleep_timeout == 60 %}selected{% endif %}>1 minute</option>
-                    <option value="120" {% if device.sleep_timeout == 120 %}selected{% endif %}>2 minutes</option>
-                    <option value="300" {% if device.sleep_timeout == 300 %}selected{% endif %}>5 minutes</option>
-                    <option value="600" {% if device.sleep_timeout == 600 %}selected{% endif %}>10 minutes</option>
-                    <option value="1800" {% if device.sleep_timeout == 1800 %}selected{% endif %}>30 minutes</option>
-                </select>
-            </div>
-            <div>
-                <label>Line Spacing</label>
-                <select name="line_gap" id="setting-lgap" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: var(--text); border-radius: 8px;">
-                    <option value="0" {% if device.line_gap == 0 %}selected{% endif %}>0 px &mdash; compact</option>
-                    <option value="1" {% if device.line_gap == 1 %}selected{% endif %}>1 px &mdash; normal</option>
-                    <option value="2" {% if device.line_gap == 2 %}selected{% endif %}>2 px &mdash; relaxed</option>
-                    <option value="3" {% if device.line_gap == 3 %}selected{% endif %}>3 px &mdash; loose</option>
-                </select>
-            </div>
-        </div>
-        <button type="submit" style="margin-top: 15px;">Save Settings</button>
-    </form>
-    <p id="settings-status" style="color: var(--success); margin-top: 10px; display: none;">Settings saved!</p>
-</div>
-
-<div class="card" style="margin-top: 20px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <h2 style="margin: 0;">Library on {{ device.name }}</h2>
-        <a href="/library" style="color: var(--primary-green); text-decoration: none; font-weight: bold;">Manage Sync &rarr;</a>
+<div class="flex-between">
+    <div style="display: flex; align-items: center; gap: 16px;">
+        <a href="/devices" class="nav-btn" style="padding: 8px 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">&larr; Back</a>
+        <h2 style="margin: 0; font-size: 24px;">{{ device.name }} <span style="font-size: 14px; color: var(--text-muted); font-weight: 400;">({{ device.mac_address }})</span></h2>
     </div>
-    {% if device.synced_books %}
-        <ul style="list-style: none; padding: 0;">
-        {% for book in device.synced_books %}
-            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 15px;">
-                <div style="font-size: 24px;">&#128214;</div>
+</div>
+
+<div class="grid-2">
+    <!-- General Settings -->
+    <div class="card stack">
+        <h2 style="margin-bottom: 0;">General Settings</h2>
+        <p class="muted">Reading preferences and system timeouts.</p>
+        <form action="/api/device/{{ device.mac_address }}/settings" method="POST" class="stack">
+            <div class="grid-2">
                 <div>
-                    <strong>{{ book.title }}</strong><br>
+                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Font Size</label>
+                    <select name="font" style="width: 100%;">
+                        <option value="8" {% if device.font_size == 8 %}selected{% endif %}>8px &mdash; Tiny</option>
+                        <option value="10" {% if device.font_size == 10 %}selected{% endif %}>10px &mdash; Small</option>
+                        <option value="12" {% if device.font_size == 12 %}selected{% endif %}>12px &mdash; Medium</option>
+                        <option value="14" {% if device.font_size == 14 %}selected{% endif %}>14px &mdash; Large</option>
+                    </select>
                 </div>
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No books synced to this device. Go to the Library to sync books.</p>
-    {% endif %}
+                <div>
+                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Auto-Sleep</label>
+                    <select name="sleep" style="width: 100%;">
+                        <option value="30" {% if device.sleep_timeout == 30 %}selected{% endif %}>30s</option>
+                        <option value="60" {% if device.sleep_timeout == 60 %}selected{% endif %}>1m</option>
+                        <option value="120" {% if device.sleep_timeout == 120 %}selected{% endif %}>2m</option>
+                        <option value="300" {% if device.sleep_timeout == 300 %}selected{% endif %}>5m</option>
+                        <option value="600" {% if device.sleep_timeout == 600 %}selected{% endif %}>10m</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Line Spacing</label>
+                    <select name="lgap" style="width: 100%;">
+                        <option value="0" {% if device.line_gap == 0 %}selected{% endif %}>Compact (0px)</option>
+                        <option value="1" {% if device.line_gap == 1 %}selected{% endif %}>Normal (1px)</option>
+                        <option value="2" {% if device.line_gap == 2 %}selected{% endif %}>Relaxed (2px)</option>
+                        <option value="3" {% if device.line_gap == 3 %}selected{% endif %}>Loose (3px)</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Screensaver Mode</label>
+                    <select name="scr_mode" style="width: 100%;">
+                        <option value="0" {% if device.screensaver_mode == 0 %}selected{% endif %}>Default</option>
+                        <option value="1" {% if device.screensaver_mode == 1 %}selected{% endif %}>Custom Bin</option>
+                        <option value="2" {% if device.screensaver_mode == 2 %}selected{% endif %}>Spotify</option>
+                    </select>
+                </div>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 8px; cursor: pointer;">
+                <input type="checkbox" name="cfg_invert" value="true" {% if device.invert_display %}checked{% endif %}>
+                Invert Display (Night Mode)
+            </label>
+            <button type="submit" style="margin-top: 8px;">Save Settings</button>
+        </form>
+    </div>
+
+    <!-- Calendar Integration -->
+    <div class="card stack">
+        <h2 style="margin-bottom: 0;">Calendar Sync</h2>
+        <p class="muted">Fetch events from an external ICAL (.ics) link.</p>
+        <form action="/api/device/{{ device.mac_address }}/calendar" method="POST" class="stack">
+            <div>
+                <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">ICAL URL</label>
+                <input type="text" name="cal_url" placeholder="https://..." value="{{ device.cal_url or '' }}">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Timezone Offset (Hours)</label>
+                <input type="number" name="tz_offset" value="{{ device.tz_offset or 0 }}" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+            </div>
+            <button type="submit" style="margin-top: 8px;">Save Calendar</button>
+        </form>
+    </div>
+
+    <!-- Spotify Integration -->
+    <div class="card stack">
+        <h2 style="margin-bottom: 0;">Spotify Now Playing</h2>
+        <p class="muted">Show currently playing track when device sleeps.</p>
+        <form action="/api/device/{{ device.mac_address }}/spotify" method="POST" class="stack">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
+                <input type="checkbox" name="spot_scr" value="true" {% if device.spotify_screensaver %}checked{% endif %}>
+                Enable Spotify Screensaver
+            </label>
+            <div>
+                <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Client ID</label>
+                <input type="text" name="spot_id" value="{{ device.spotify_client_id or '' }}">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Client Secret</label>
+                <input type="password" name="spot_secret" value="{{ device.spotify_client_secret or '' }}">
+            </div>
+            <div>
+                <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Refresh Token</label>
+                <input type="password" name="spot_refresh" value="{{ device.spotify_refresh_token or '' }}">
+            </div>
+            <button type="submit" style="margin-top: 8px;">Save Spotify</button>
+        </form>
+    </div>
+
+    <!-- Chess Elo -->
+    <div class="card stack">
+        <h2 style="margin-bottom: 0;">Chess</h2>
+        <p class="muted">Set your puzzle Elo rating for the built-in chess game.</p>
+        <form action="/api/device/{{ device.mac_address }}/chess" method="POST" class="stack">
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <input type="number" name="chess_elo" value="{{ device.chess_elo or 1500 }}" style="flex-grow: 1; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+                <button type="submit" style="width: auto;">Save Elo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Interactive Screensaver Creator -->
+<div class="card stack" style="margin-top: 24px;">
+    <h2>Interactive Screensaver Creator</h2>
+    <p class="muted">Design a custom screensaver. Download the <code style="color:var(--primary); font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">sleep.bin</code> and upload it via the local Web UI to apply.</p>
+    
+    <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <!-- Canvas Area -->
+        <div style="flex-grow: 1; min-width: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border: 1px dashed var(--border); border-radius: 16px; padding: 24px;">
+            <canvas id="screensaver-canvas" width="250" height="122" style="border: 2px solid var(--border); background: white; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); cursor: grab;"></canvas>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">250x122 pixels - Drag to move image/text</div>
+        </div>
+
+        <!-- Controls -->
+        <div style="flex-grow: 1; min-width: 300px;" class="stack">
+            <div class="grid-2">
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">Background Image</label>
+                    <input type="file" id="scr-image-input" accept="image/*" style="padding: 6px;">
+                </div>
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">Drag Tool</label>
+                    <select id="scr-drag-mode">
+                        <option value="image">Move Image</option>
+                        <option value="text">Move Text</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">Image Scale (<span id="scr-scale-val">1.00</span>)</label>
+                    <input type="range" id="scr-image-scale" min="0.1" max="3" step="0.05" value="1" oninput="updateScrScale(this.value)" style="width: 100%;">
+                </div>
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">Image Position (X/Y)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="number" id="scr-image-x" value="0" oninput="updateScrImagePosInputs()" style="padding: 6px; border-radius: 6px;">
+                        <input type="number" id="scr-image-y" value="0" oninput="updateScrImagePosInputs()" style="padding: 6px; border-radius: 6px;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">B&W Threshold (<span id="scr-threshold-val">128</span>)</label>
+                    <input type="range" id="scr-image-threshold" min="0" max="255" value="128" oninput="updateScrThreshold(this.value)" style="width: 100%;">
+                </div>
+                <div class="stack" style="gap: 6px; flex-direction: row; align-items: flex-end;">
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px;"><input type="checkbox" id="scr-dither-enable" onchange="drawScreensaverPreview()"> Dither</label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px;"><input type="checkbox" id="scr-invert-enable" onchange="drawScreensaverPreview()"> Invert</label>
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 8px 0;">
+
+            <div class="stack" style="gap: 6px;">
+                <label style="font-size: 13px; color: var(--text-muted);">Overlay Text</label>
+                <input type="text" id="scr-text-input" placeholder="Type here..." oninput="drawScreensaverPreview()">
+            </div>
+
+            <div class="grid-2">
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">Text Size (<span id="scr-text-size-val">16</span>px)</label>
+                    <input type="range" id="scr-text-size" min="8" max="72" value="16" oninput="updateScrTextSize(this.value)" style="width: 100%;">
+                </div>
+                <div class="stack" style="gap: 6px;">
+                    <label style="font-size: 13px; color: var(--text-muted);">Font Family</label>
+                    <select id="scr-text-font" onchange="updateScrTextFont(this.value)">
+                        <option value="sans-serif">Sans-Serif</option>
+                        <option value="serif">Serif</option>
+                        <option value="monospace">Monospace</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="stack" style="gap: 6px; display: none;">
+                <!-- Hidden inputs to track text position for drag tool -->
+                <input type="hidden" id="scr-text-x" value="125">
+                <input type="hidden" id="scr-text-y" value="61">
+            </div>
+
+            <button onclick="downloadScreensaverBin()" style="margin-top: 12px; background: var(--success);">Download sleep.bin</button>
+        </div>
+    </div>
 </div>
 
 <script>
-    document.getElementById('device-settings-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const formData = new FormData(form);
-        const res = await fetch(form.action, { method: 'POST', body: formData });
-        if (res.ok) {
-            const status = document.getElementById('settings-status');
-            status.style.display = 'block';
-            setTimeout(() => status.style.display = 'none', 3000);
+// Interactive Screensaver Designer variables
+let scrImage = null;
+let scrScale = 1.0;
+let scrImgX = 0;
+let scrImgY = 0;
+let scrTextX = 125;
+let scrTextY = 61;
+let scrTextSize = 16;
+let scrTextColor = "black";
+let scrTextFont = "sans-serif";
+let scrIsDragging = false;
+let scrDragStartX = 0;
+let scrDragStartY = 0;
+
+function initScreensaverDesigner() {
+  const canvas = document.getElementById('screensaver-canvas');
+  const imageInput = document.getElementById('scr-image-input');
+  if (!canvas) return;
+
+  imageInput.onchange = (e) => {
+    if (e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        scrImage = new Image();
+        scrImage.onload = () => {
+          // Center and scale image to fit canvas bounds initially
+          const scaleW = 250 / scrImage.width;
+          const scaleH = 122 / scrImage.height;
+          scrScale = Math.max(scaleW, scaleH);
+          document.getElementById('scr-image-scale').value = scrScale.toFixed(2);
+          document.getElementById('scr-scale-val').innerText = scrScale.toFixed(2);
+          
+          scrImgX = Math.round((250 - scrImage.width * scrScale) / 2);
+          scrImgY = Math.round((122 - scrImage.height * scrScale) / 2);
+          document.getElementById('scr-image-x').value = scrImgX;
+          document.getElementById('scr-image-y').value = scrImgY;
+          
+          drawScreensaverPreview();
+        };
+        scrImage.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 250);
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 122);
+    scrIsDragging = true; scrDragStartX = x; scrDragStartY = y; e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!scrIsDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 250);
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 122);
+    const dx = x - scrDragStartX; const dy = y - scrDragStartY;
+    scrDragStartX = x; scrDragStartY = y;
+    const dragMode = document.getElementById('scr-drag-mode').value;
+    if (dragMode === 'text') {
+      scrTextX += dx; scrTextY += dy;
+      document.getElementById('scr-text-x').value = scrTextX;
+      document.getElementById('scr-text-y').value = scrTextY;
+    } else {
+      scrImgX += dx; scrImgY += dy;
+      document.getElementById('scr-image-x').value = scrImgX;
+      document.getElementById('scr-image-y').value = scrImgY;
+    }
+    drawScreensaverPreview();
+  });
+  window.addEventListener('mouseup', () => scrIsDragging = false);
+  drawScreensaverPreview();
+}
+
+function updateScrScale(val) { scrScale = parseFloat(val); document.getElementById('scr-scale-val').innerText = scrScale.toFixed(2); drawScreensaverPreview(); }
+function updateScrThreshold(val) { document.getElementById('scr-threshold-val').innerText = val; drawScreensaverPreview(); }
+function updateScrImagePosInputs() { scrImgX = parseInt(document.getElementById('scr-image-x').value) || 0; scrImgY = parseInt(document.getElementById('scr-image-y').value) || 0; drawScreensaverPreview(); }
+function updateScrTextSize(val) { scrTextSize = parseInt(val); document.getElementById('scr-text-size-val').innerText = val; drawScreensaverPreview(); }
+function updateScrTextFont(val) { scrTextFont = val; drawScreensaverPreview(); }
+
+function thresholdConvert(imgData, threshold) {
+  const d = imgData.data; const out = new Uint8ClampedArray(250 * 122);
+  for (let i = 0; i < d.length; i += 4) {
+    const luma = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    out[i/4] = luma < threshold ? 0 : 255;
+  }
+  return out;
+}
+
+function floydSteinbergDither(imgData, threshold) {
+  const w = 250; const h = 122; const d = imgData.data;
+  const buffer = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i += 4) { buffer[i/4] = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]; }
+  const out = new Uint8ClampedArray(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      const oldPixel = buffer[idx];
+      const newPixel = oldPixel < threshold ? 0 : 255;
+      out[idx] = newPixel;
+      const err = oldPixel - newPixel;
+      if (x + 1 < w)   buffer[idx + 1] += err * 7 / 16;
+      if (y + 1 < h) {
+        if (x > 0)     buffer[idx + w - 1] += err * 3 / 16;
+        buffer[idx + w] += err * 5 / 16;
+        if (x + 1 < w) buffer[idx + w + 1] += err * 1 / 16;
+      }
+    }
+  }
+  return out;
+}
+
+function drawScreensaverPreview() {
+  const canvas = document.getElementById('screensaver-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 250, 122);
+  
+  if (scrImage) {
+    const offscreen = document.createElement('canvas');
+    offscreen.width = 250; offscreen.height = 122;
+    const oCtx = offscreen.getContext('2d');
+    oCtx.fillStyle = '#ffffff'; oCtx.fillRect(0, 0, 250, 122);
+    
+    const dw = scrImage.width * scrScale;
+    const dh = scrImage.height * scrScale;
+    oCtx.drawImage(scrImage, scrImgX, scrImgY, dw, dh);
+    
+    const imgData = oCtx.getImageData(0, 0, 250, 122);
+    const dither = document.getElementById('scr-dither-enable').checked;
+    const threshold = parseInt(document.getElementById('scr-image-threshold').value);
+    const invert = document.getElementById('scr-invert-enable').checked;
+    
+    let pixels = dither ? floydSteinbergDither(imgData, threshold) : thresholdConvert(imgData, threshold);
+    
+    const targetData = ctx.createImageData(250, 122);
+    for (let i = 0; i < pixels.length; i++) {
+      let val = pixels[i];
+      if (invert) val = 255 - val;
+      const idx = i * 4;
+      targetData.data[idx] = val; targetData.data[idx+1] = val; targetData.data[idx+2] = val; targetData.data[idx+3] = 255;
+    }
+    ctx.putImageData(targetData, 0, 0);
+  }
+  
+  const text = document.getElementById('scr-text-input').value;
+  if (text) {
+    ctx.font = `${scrTextSize}px ${scrTextFont}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = scrTextColor === 'white' ? '#ffffff' : '#000000';
+    ctx.strokeStyle = scrTextColor === 'white' ? '#000000' : '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.strokeText(text, scrTextX, scrTextY);
+    ctx.fillText(text, scrTextX, scrTextY);
+  }
+}
+
+function compileScreensaverBin() {
+  const canvas = document.getElementById('screensaver-canvas');
+  if (!canvas) return null;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.getImageData(0, 0, 250, 122);
+  const d = imgData.data;
+  const buffer = new Uint8Array(3904); // 32 bytes/row * 122 rows
+  for (let y = 0; y < 122; y++) {
+    for (let b = 0; b < 32; b++) {
+      let byteVal = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const x = b * 8 + bit;
+        let isWhite = true;
+        if (x < 250) {
+          const idx = (y * 250 + x) * 4;
+          isWhite = (d[idx] >= 128);
+        } else {
+          const idx = (y * 250 + 249) * 4;
+          isWhite = (d[idx] >= 128);
         }
-    });
+        if (isWhite) byteVal |= (1 << bit); // LSB-first
+      }
+      buffer[y * 32 + b] = byteVal;
+    }
+  }
+  return buffer;
+}
+
+function downloadScreensaverBin() {
+  const bytes = compileScreensaverBin();
+  if (!bytes) return;
+  const blob = new Blob([bytes], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sleep.bin';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    initScreensaverDesigner();
+});
 </script>
 {% endblock %}

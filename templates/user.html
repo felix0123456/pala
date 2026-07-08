@@ -3,14 +3,23 @@
 {% block content %}
 <div class="card">
     <h2>User Profile</h2>
-    <p>Logged in as: <strong style="color: white; font-size: 1.2em;">{{ user.username }}</strong></p>
+    <p class="muted">Manage your account and preferences.</p>
     
-    <div style="margin-top: 30px; display: flex; gap: 15px; flex-direction: column;">
-        {% if user.is_admin %}
-        <a href="/admin" style="display: block; text-align: center; background: var(--accent-yellow); color: var(--bg-dark); padding: 12px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: opacity 0.2s;">Admin Dashboard</a>
+    <div class="stack" style="margin-bottom: 24px;">
+        <div style="font-size: 14px; color: var(--text-muted);">Logged in as</div>
+        <div style="font-size: 24px; font-weight: 600;">{{ user.username }}</div>
+    </div>
+    
+    <div class="stack">
+        {% if getattr(user, 'is_admin', False) %}
+        <a href="/admin" class="nav-btn" style="text-align: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">
+            &#9881; Admin Dashboard
+        </a>
         {% endif %}
         
-        <a href="/logout" style="display: block; text-align: center; background: #ef4444; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: background 0.2s;">Logout</a>
+        <a href="/logout" class="nav-btn" style="text-align: center; justify-content: center; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #fca5a5;">
+            Logout
+        </a>
     </div>
 </div>
 {% endblock %}

@@ -40,6 +40,24 @@ with engine.connect() as conn:
     except Exception:
         pass
 
+    new_columns = [
+        "screensaver_mode INTEGER DEFAULT 0",
+        "invert_display BOOLEAN DEFAULT FALSE",
+        "spotify_client_id VARCHAR",
+        "spotify_client_secret VARCHAR",
+        "spotify_refresh_token VARCHAR",
+        "spotify_screensaver BOOLEAN DEFAULT FALSE",
+        "chess_elo INTEGER",
+        "cal_url VARCHAR",
+        "tz_offset INTEGER DEFAULT 0"
+    ]
+    for col in new_columns:
+        try:
+            conn.execute(text(f"ALTER TABLE devices ADD COLUMN {col}"))
+            conn.commit()
+        except Exception:
+            pass
+
 app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
 
@@ -170,18 +188,84 @@ async def device_view(request: Request, mac_address: str, db: Session = Depends(
     return templates.TemplateResponse(request=request, name="device.html", context={"device": device, "books": user.books})
 
 @app.post("/api/device/{mac_address}/settings")
-async def update_device_settings(mac_address: str, font_size: int = Form(...), sleep_timeout: int = Form(...), line_gap: int = Form(...), request: Request = None, db: Session = Depends(get_db)):
+async def update_device_settings(
+    mac_address: str, 
+    font: int = Form(...), 
+    sleep: int = Form(...), 
+    lgap: int = Form(...), 
+    scr_mode: int = Form(0),
+    cfg_invert: Optional[bool] = Form(False),
+    request: Request = None, 
+    db: Session = Depends(get_db)):
     user = auth.get_current_user(request, db)
     if not user:
         raise HTTPException(status_code=401)
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if not device:
         raise HTTPException(status_code=404)
-    device.font_size = font_size
-    device.sleep_timeout = sleep_timeout
-    device.line_gap = line_gap
+    device.font_size = font
+    device.sleep_timeout = sleep
+    device.line_gap = lgap
+    device.screensaver_mode = scr_mode
+    device.invert_display = cfg_invert
     db.commit()
-    return {"status": "ok"}
+    return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
+
+@app.post("/api/device/{mac_address}/calendar")
+async def update_device_calendar(
+    mac_address: str,
+    cal_url: str = Form(""),
+    tz_offset: int = Form(0),
+    request: Request = None, 
+    db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        raise HTTPException(status_code=404)
+    device.cal_url = cal_url
+    device.tz_offset = tz_offset
+    db.commit()
+    return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
+
+@app.post("/api/device/{mac_address}/spotify")
+async def update_device_spotify(
+    mac_address: str,
+    spot_scr: Optional[bool] = Form(False),
+    spot_id: str = Form(""),
+    spot_secret: str = Form(""),
+    spot_refresh: str = Form(""),
+    request: Request = None, 
+    db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        raise HTTPException(status_code=404)
+    device.spotify_screensaver = spot_scr
+    device.spotify_client_id = spot_id
+    device.spotify_client_secret = spot_secret
+    device.spotify_refresh_token = spot_refresh
+    db.commit()
+    return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
+
+@app.post("/api/device/{mac_address}/chess")
+async def update_device_chess(
+    mac_address: str,
+    chess_elo: int = Form(1500),
+    request: Request = None, 
+    db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        raise HTTPException(status_code=404)
+    device.chess_elo = chess_elo
+    db.commit()
+    return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
 
 @app.post("/device/{mac_address}/rename")
 async def rename_device(mac_address: str, name: str = Form(...), request: Request = None, db: Session = Depends(get_db)):
@@ -388,6 +472,15 @@ class SyncPushData(BaseModel):
     sleep_timeout: int
     line_gap: int
     bookmarks: list # list of dicts: [{"book_id": 1, "page_index": 42}]
+    screensaver_mode: Optional[int] = None
+    invert_display: Optional[bool] = None
+    spotify_client_id: Optional[str] = None
+    spotify_client_secret: Optional[str] = None
+    spotify_refresh_token: Optional[str] = None
+    spotify_screensaver: Optional[bool] = None
+    chess_elo: Optional[int] = None
+    cal_url: Optional[str] = None
+    tz_offset: Optional[int] = None
 
 @app.post("/api/device/register")
 async def register_device(data: DeviceRegister, db: Session = Depends(get_db)):
@@ -417,6 +510,16 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
     device.font_size = data.font_size
     device.sleep_timeout = data.sleep_timeout
     device.line_gap = data.line_gap
+
+    if data.screensaver_mode is not None: device.screensaver_mode = data.screensaver_mode
+    if data.invert_display is not None: device.invert_display = data.invert_display
+    if data.spotify_client_id is not None: device.spotify_client_id = data.spotify_client_id
+    if data.spotify_client_secret is not None: device.spotify_client_secret = data.spotify_client_secret
+    if data.spotify_refresh_token is not None: device.spotify_refresh_token = data.spotify_refresh_token
+    if data.spotify_screensaver is not None: device.spotify_screensaver = data.spotify_screensaver
+    if data.chess_elo is not None: device.chess_elo = data.chess_elo
+    if data.cal_url is not None: device.cal_url = data.cal_url
+    if data.tz_offset is not None: device.tz_offset = data.tz_offset
 
     # Update bookmarks
     for bm in data.bookmarks:
@@ -450,6 +553,15 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         "font_size": device.font_size,
         "sleep_timeout": device.sleep_timeout,
         "line_gap": device.line_gap,
+        "screensaver_mode": device.screensaver_mode,
+        "invert_display": device.invert_display,
+        "spotify_client_id": device.spotify_client_id,
+        "spotify_client_secret": device.spotify_client_secret,
+        "spotify_refresh_token": device.spotify_refresh_token,
+        "spotify_screensaver": device.spotify_screensaver,
+        "chess_elo": device.chess_elo,
+        "cal_url": device.cal_url,
+        "tz_offset": device.tz_offset,
         "books": books_data
     }
 

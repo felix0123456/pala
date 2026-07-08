@@ -30,6 +30,16 @@ class Device(Base):
     font_size = Column(Integer, default=10)
     sleep_timeout = Column(Integer, default=120)
     line_gap = Column(Integer, default=0)
+    
+    screensaver_mode = Column(Integer, default=0)
+    invert_display = Column(Boolean, default=False)
+    spotify_client_id = Column(String, nullable=True)
+    spotify_client_secret = Column(String, nullable=True)
+    spotify_refresh_token = Column(String, nullable=True)
+    spotify_screensaver = Column(Boolean, default=False)
+    chess_elo = Column(Integer, nullable=True)
+    cal_url = Column(String, nullable=True)
+    tz_offset = Column(Integer, default=0)
 
     owner = relationship("User", back_populates="devices")
     bookmarks = relationship("Bookmark", back_populates="device")

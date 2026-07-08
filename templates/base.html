@@ -1,111 +1,158 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width,initial-scale=1'>
     <title>Pala Cloud Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #0a0f0d;
-            --card-bg: #111a14;
-            --border: #1a2e20;
-            --primary-green: #10b981;
-            --accent-yellow: #fbbf24;
-            --text-main: #ecfdf5;
-            --text-muted: #a7f3d0;
+            --bg: #090d16;
+            --card-bg: rgba(22, 30, 49, 0.7);
+            --sidebar-bg: rgba(15, 23, 42, 0.6);
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
         }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: var(--bg-dark); 
-            color: var(--text-main); 
-            margin: 0; 
-            padding: 2rem; 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: radial-gradient(circle at 50% 50%, #1e1b4b 0%, var(--bg) 100%);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+        }
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid var(--border);
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            gap: 24px;
+            flex-shrink: 0;
         }
-        h1 { 
-            color: var(--accent-yellow); 
-            text-shadow: 0 0 10px rgba(251, 191, 36, 0.2);
-            font-size: 2.5rem;
+        .logo-area { display: flex; flex-direction: column; gap: 4px; }
+        .logo-title {
+            font-size: 22px; font-weight: 700;
+            background: linear-gradient(to right, #818cf8, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        .card { 
-            background: var(--card-bg); 
-            padding: 2rem; 
-            border-radius: 16px; 
-            border: 1px solid var(--border); 
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.05);
-            max-width: 600px; 
-            width: 100%;
-            margin-top: 1rem; 
+        .logo-subtitle { font-size: 12px; color: var(--text-muted); }
+        .nav-menu { display: flex; flex-direction: column; gap: 8px; }
+        .nav-btn {
+            background: transparent; border: 1px solid transparent;
+            color: var(--text-muted); padding: 12px 16px;
+            border-radius: 10px; text-align: left;
+            font-size: 15px; font-weight: 500; cursor: pointer;
+            display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+            transition: all 0.2s ease; text-decoration: none;
         }
-        h2 { color: var(--primary-green); }
-        p { color: var(--text-muted); line-height: 1.6; }
-        input[type="text"], input[type="password"] {
-            width: 100%;
-            padding: 12px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: white;
-            margin-top: 10px;
-            margin-bottom: 10px;
+        .nav-btn:hover { background: rgba(255,255,255,0.03); color: var(--text); text-decoration: none; }
+        .nav-btn.active {
+            background: var(--card-bg); border-color: var(--border);
+            color: var(--text); box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .main-content {
+            flex-grow: 1; padding: 32px; overflow-y: auto;
+            max-width: 1200px; margin: 0 auto; width: 100%;
+            display: flex; flex-direction: column; gap: 24px;
+        }
+        .card {
+            background: var(--card-bg); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); border-radius: 16px;
+            padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        h2 { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+        p.muted { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        input[type=text], input[type=password], select, textarea {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text); padding: 12px;
+            width: 100%; font-family: inherit; font-size: 14px;
+            transition: border-color 0.2s;
             box-sizing: border-box;
         }
-        input:focus {
-            outline: none;
-            border-color: var(--accent-yellow);
+        input[type=checkbox] {
+            accent-color: var(--primary);
+            width: 16px; height: 16px;
         }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .stack { display: flex; flex-direction: column; gap: 12px; }
         button {
-            background: linear-gradient(135deg, var(--primary-green), #059669);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            width: 100%;
-            box-sizing: border-box;
+            background: var(--primary); color: var(--text); font-weight: 600;
+            border: 0; border-radius: 10px; padding: 12px 20px;
+            font-family: inherit; font-size: 14px; cursor: pointer;
+            transition: all 0.2s ease;
         }
-        button:hover {
-            background: linear-gradient(135deg, #059669, #047857);
-            transform: translateY(-1px);
-        }
-        .nav {
-            margin-bottom: 2rem;
-            display: flex;
-            gap: 20px;
-            background: var(--card-bg);
-            padding: 12px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .nav a {
-            color: var(--primary-green);
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-        .nav a:hover {
-            color: var(--accent-yellow);
+        button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        button.secondary { background: rgba(255,255,255,0.05); border: 1px solid var(--border); }
+        button.secondary:hover { background: rgba(255,255,255,0.1); }
+        button.danger { background: var(--danger); }
+        button.danger:hover { background: #dc2626; }
+        ul.list-group { list-style: none; padding: 0; }
+        ul.list-group li { margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border); }
+        a { color: var(--primary); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        @media (max-width: 900px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
         }
     </style>
 </head>
 <body>
-    <h1>Pala Cloud Hub</h1>
-    <div class="nav">
-        {% if user %}
-            <a href="/">Dashboard</a>
-            <a href="/library">Library</a>
-            <a href="/devices">Devices</a>
-            <a href="/user" style="margin-left: auto;">User ({{ user.username }})</a>
-        {% else %}
-            <a href="/login">Login</a>
-            <a href="/register">Register</a>
-        {% endif %}
+    <div class='sidebar'>
+        <div class='logo-area'>
+            <div class='logo-title'>Pala Cloud Hub</div>
+            <div class='logo-subtitle'>Device Management</div>
+        </div>
+        <div class='nav-menu'>
+            {% if user %}
+                <a href='/user' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128100;</span> User</div>
+                </a>
+                <a href='/devices' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128241;</span> Device</div>
+                    {% if device %}
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: *****{{ device.name }}</div>
+                    {% elif user.devices and user.devices|length > 0 %}
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: *****{{ user.devices[0].name }}</div>
+                    {% else %}
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: *****None</div>
+                    {% endif %}
+                </a>
+                <a href='/' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128214;</span> Home</div>
+                </a>
+                <a href='/library' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128218;</span> Library</div>
+                </a>
+                {% if getattr(user, 'is_admin', False) %}
+                <a href='/admin' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#9881;</span> Admin Dashboard</div>
+                </a>
+                {% endif %}
+            {% else %}
+                <a href='/login' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128274;</span> Login</div>
+                </a>
+                <a href='/register' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#9997;</span> Register</div>
+                </a>
+            {% endif %}
+        </div>
     </div>
-
-    {% block content %}
-    {% endblock %}
+    <div class='main-content'>
+        {% block content %}{% endblock %}
+    </div>
 </body>
 </html>

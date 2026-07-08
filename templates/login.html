@@ -1,18 +1,22 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card">
-    <h2>Login to Pala Cloud</h2>
+<div class="card" style="max-width: 400px; margin: 40px auto; width: 100%;">
+    <div class="logo-title" style="text-align: center; margin-bottom: 24px; font-size: 28px;">Welcome Back</div>
+    <p class="muted" style="text-align: center;">Login to your Pala Cloud account.</p>
+    
     {% if error %}
-    <p style="color: #ef4444;">{{ error }}</p>
+    <p style="color: var(--danger); text-align: center; font-weight: 500;">{{ error }}</p>
     {% endif %}
-    <form method="POST" action="/login">
+    
+    <form method="POST" action="/login" class="stack">
         <input type="text" name="username" placeholder="Username" required>
         <input type="password" name="password" placeholder="Password" required>
-        <button type="submit">Login</button>
+        <button type="submit" style="margin-top: 8px;">Login</button>
     </form>
-    <p style="text-align: center; margin-top: 1rem;">
-        Don't have an account? <a href="/register" style="color: var(--accent-yellow);">Register here</a>
+    
+    <p style="text-align: center; margin-top: 24px; font-size: 14px; color: var(--text-muted);">
+        Don't have an account? <a href="/register" style="color: var(--primary); font-weight: 500;">Register here</a>
     </p>
 </div>
 {% endblock %}

@@ -1,20 +1,24 @@
 {% extends "base.html" %}
 
 {% block content %}
-<p style="text-align:center; max-width: 500px; margin-bottom: 30px;">Welcome to your Pala Cloud Hub Dashboard.</p>
-
 <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <div class="flex-between" style="margin-bottom: 16px;">
         <h2 style="margin: 0;">Your Devices</h2>
-        <a href="/devices" style="color: var(--primary-green); text-decoration: none; font-weight: bold;">Manage &rarr;</a>
+        <a href="/devices" style="font-weight: 500;">Manage &rarr;</a>
     </div>
     {% if devices %}
-        <ul style="list-style: none; padding: 0;">
+        <ul class="list-group">
         {% for device in devices %}
-            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
-                <a href="/device/{{ device.mac_address }}" style="color: var(--text-main); text-decoration: none; display: block;">
-                    <strong>{{ device.name }}</strong> ({{ device.mac_address }})<br>
-                    <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }}</span>
+            <li>
+                <a href="/device/{{ device.mac_address }}" style="display: flex; justify-content: space-between; align-items: center; color: var(--text);">
+                    <div>
+                        <div style="font-weight: 600; font-size: 16px;">{{ device.name }}</div>
+                        <div style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">{{ device.mac_address }}</div>
+                    </div>
+                    <div style="text-align: right; color: var(--text-muted); font-size: 13px;">
+                        <div>&#128267; {{ device.battery_level }}%</div>
+                        <div>Font: {{ device.font_size }}</div>
+                    </div>
                 </a>
             </li>
         {% endfor %}
@@ -22,27 +26,29 @@
     {% endif %}
 </div>
 
-<div class="card" style="margin-top: 20px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+<div class="card">
+    <div class="flex-between" style="margin-bottom: 16px;">
         <h2 style="margin: 0;">Your Library</h2>
-        <a href="/library" style="color: var(--primary-green); text-decoration: none; font-weight: bold;">Manage &rarr;</a>
+        <a href="/library" style="font-weight: 500;">Manage &rarr;</a>
     </div>
     {% if books %}
-        <ul style="list-style: none; padding: 0;">
+        <ul class="list-group">
         {% for book in books %}
-            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
-                <strong>{{ book.title }}</strong><br>
-                <span style="color: var(--text-muted); font-size: 0.9em;">
+            <li>
+                <div style="font-weight: 600;">{{ book.title }}</div>
+                <div style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
                     Bookmarks: 
                     {% for bm in book.bookmarks %}
-                        Page {{ bm.page_index }}
+                        <span style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-right: 4px;">Page {{ bm.page_index }}</span>
+                    {% else %}
+                        None
                     {% endfor %}
-                </span>
+                </div>
             </li>
         {% endfor %}
         </ul>
     {% else %}
-        <p>Your library is empty.</p>
+        <p class="muted">Your library is empty.</p>
     {% endif %}
 </div>
 {% endblock %}
