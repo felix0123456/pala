@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.7.7"
+#define FW_VERSION "1.8.0"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -184,7 +184,8 @@ enum Mode {
   MODE_CHESS,
   MODE_TODO,
   MODE_CALENDAR,
-  MODE_CHAPTER_LIST
+  MODE_CHAPTER_LIST,
+  MODE_POMODORO
 };
 Mode mode = MODE_LIBRARY;
 
@@ -266,10 +267,11 @@ enum LibraryEntryType {
   LIB_ENTRY_CALENDAR,
   LIB_ENTRY_SPOTIFY,
   LIB_ENTRY_CHESS,
-  LIB_ENTRY_SETTINGS
+  LIB_ENTRY_SETTINGS,
+  LIB_ENTRY_POMODORO
 };
 
-static const int MAX_LIBRARY_ENTRIES = MAX_BOOKS + MAX_FOLDERS + 6;
+static const int MAX_LIBRARY_ENTRIES = MAX_BOOKS + MAX_FOLDERS + 7;
 LibraryEntryType libraryEntryTypes[MAX_LIBRARY_ENTRIES];
 int libraryEntryRefs[MAX_LIBRARY_ENTRIES];
 int libraryEntryCount = 0;
@@ -739,6 +741,10 @@ void initChessGame();
 void handleModeChess();
 void drawChessScreen();
 bool fetchChessPuzzle();
+
+void initPomodoro();
+void handleModePomodoro();
+void drawPomodoroScreen();
 
 static void safeCloseBook();
 static void enterLibraryRoot(bool redraw);
@@ -1570,6 +1576,7 @@ static String libraryEntryLabel(int idx) {
     case LIB_ENTRY_SPOTIFY:   return "Spotify";
     case LIB_ENTRY_SETTINGS:  return "Settings";
     case LIB_ENTRY_CHESS:     return "Chess";
+    case LIB_ENTRY_POMODORO:  return "Pomodoro Timer";
   }
   return "";
 }
@@ -1624,6 +1631,11 @@ static void buildLibraryEntries() {
   }
   if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
     libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_SETTINGS;
+    libraryEntryRefs[libraryEntryCount] = -1;
+    libraryEntryCount++;
+  }
+  if (libraryEntryCount < MAX_LIBRARY_ENTRIES) {
+    libraryEntryTypes[libraryEntryCount] = LIB_ENTRY_POMODORO;
     libraryEntryRefs[libraryEntryCount] = -1;
     libraryEntryCount++;
   }
@@ -5036,6 +5048,11 @@ static void handleModeLibrary() {
     initChessGame();
     return;
   }
+  if (entryType == LIB_ENTRY_POMODORO) {
+    mode = MODE_POMODORO;
+    initPomodoro();
+    return;
+  }
 }
 
 void jumpBookOffset(int percentChange) {
@@ -5846,6 +5863,222 @@ void drawDailyBoardScreensaver() {
   display.update();
 }
 
+// ============================================================================
+//  Pomodoro App
+// ============================================================================
+enum PomodoroState {
+  POM_SET_STUDY,
+  POM_STUDY,
+  POM_STUDY_DONE,
+  POM_SET_BREAK,
+  POM_BREAK,
+  POM_BREAK_DONE
+};
+
+static PomodoroState g_pomState = POM_SET_STUDY;
+static int g_pomStudyDuration = 25;
+static int g_pomBreakDuration = 5;
+static int g_pomRemainingMin = 0;
+static bool g_pomSkipBreak = false;
+static uint32_t g_pomLastMinTick = 0;
+
+void initPomodoro() {
+  g_pomState = POM_SET_STUDY;
+  g_pomStudyDuration = 25;
+  g_pomBreakDuration = 5;
+  g_pomRemainingMin = 0;
+  g_pomSkipBreak = false;
+  drawPomodoroScreen();
+}
+
+void drawPomodoroScreen() {
+  display.fastmodeOff();
+  display.clear();
+  gfx.disableInversion = true;
+  
+  u8g2.setFontMode(1);
+  u8g2.setFontDirection(0);
+  u8g2.setForegroundColor(1);
+  u8g2.setBackgroundColor(0);
+
+  auto drawCentered = [](const char* text, int y, const uint8_t* font) {
+      u8g2.setFont(font);
+      int w = u8g2.getUTF8Width(text);
+      int x = (W - w) / 2;
+      u8g2.setCursor(x, y);
+      u8g2.print(text);
+  };
+
+  if (g_pomState == POM_SET_STUDY) {
+      drawCentered("Study Time", 40, u8g2_font_helvR14_tf);
+      char buf[32];
+      sprintf(buf, "%d min", g_pomStudyDuration);
+      drawCentered(buf, 80, u8g2_font_logisoso24_tf);
+  } 
+  else if (g_pomState == POM_STUDY) {
+      drawCentered("Study", 40, u8g2_font_helvR14_tf);
+      char buf[32];
+      sprintf(buf, "%d min left", g_pomRemainingMin);
+      drawCentered(buf, 80, u8g2_font_logisoso24_tf);
+  }
+  else if (g_pomState == POM_STUDY_DONE) {
+      drawCentered("Study time finished", 70, u8g2_font_helvR14_tf);
+  }
+  else if (g_pomState == POM_SET_BREAK) {
+      drawCentered("Break Time", 40, u8g2_font_helvR14_tf);
+      if (g_pomSkipBreak) {
+          drawCentered("Skip Break", 80, u8g2_font_logisoso24_tf);
+      } else {
+          char buf[32];
+          sprintf(buf, "%d min", g_pomBreakDuration);
+          drawCentered(buf, 80, u8g2_font_logisoso24_tf);
+      }
+  }
+  else if (g_pomState == POM_BREAK) {
+      drawCentered("Break", 40, u8g2_font_helvR14_tf);
+      char buf[32];
+      sprintf(buf, "%d min left", g_pomRemainingMin);
+      drawCentered(buf, 80, u8g2_font_logisoso24_tf);
+  }
+  else if (g_pomState == POM_BREAK_DONE) {
+      drawCentered("New study session Time", 40, u8g2_font_helvR14_tf);
+      char buf[32];
+      sprintf(buf, "%d min", g_pomStudyDuration);
+      drawCentered(buf, 80, u8g2_font_logisoso24_tf);
+  }
+  
+  display.update();
+  gfx.disableInversion = false;
+}
+
+static void flashPomodoroScreen() {
+  gfx.disableInversion = true;
+  for (int i = 0; i < 5; i++) {
+      display.fastmodeOn();
+      gfx.fillScreen(1);
+      display.update();
+      delay(1000);
+      
+      gfx.fillScreen(0);
+      display.update();
+      delay(1000);
+  }
+  display.fastmodeOff();
+  gfx.disableInversion = false;
+}
+
+void handleModePomodoro() {
+  bool btn1Clicked = btns.b1.shortClick;
+  bool btn2Clicked = btns.b2.shortClick;
+  bool longPress1  = btns.b1.longClick;
+  
+  if (g_pomState == POM_SET_STUDY) {
+      if (btn2Clicked) {
+          if (g_pomStudyDuration < 60) {
+              g_pomStudyDuration += 5;
+          } else if (g_pomStudyDuration < 120) {
+              g_pomStudyDuration += 15;
+          } else {
+              g_pomStudyDuration = 5;
+          }
+          drawPomodoroScreen();
+      }
+      if (btn1Clicked) {
+          g_pomRemainingMin = g_pomStudyDuration;
+          g_pomState = POM_STUDY;
+          g_pomLastMinTick = millis();
+          drawPomodoroScreen();
+      }
+  }
+  else if (g_pomState == POM_STUDY) {
+      if (millis() - g_pomLastMinTick >= 60000) {
+          g_pomRemainingMin--;
+          g_pomLastMinTick += 60000;
+          if (g_pomRemainingMin <= 0) {
+              g_pomState = POM_STUDY_DONE;
+              flashPomodoroScreen();
+              drawPomodoroScreen();
+          } else {
+              drawPomodoroScreen();
+          }
+      }
+      if (longPress1) {
+          g_pomState = POM_SET_STUDY;
+          drawPomodoroScreen();
+      }
+  }
+  else if (g_pomState == POM_STUDY_DONE) {
+      if (btn1Clicked || btn2Clicked) {
+          g_pomState = POM_SET_BREAK;
+          g_pomSkipBreak = false;
+          g_pomBreakDuration = 5;
+          drawPomodoroScreen();
+      }
+  }
+  else if (g_pomState == POM_SET_BREAK) {
+      if (btn2Clicked) {
+          if (g_pomSkipBreak) {
+              g_pomSkipBreak = false;
+              g_pomBreakDuration = 3;
+          } else {
+              if (g_pomBreakDuration < 15) {
+                  g_pomBreakDuration += 1;
+              } else if (g_pomBreakDuration < 30) {
+                  g_pomBreakDuration += 5;
+              } else {
+                  g_pomSkipBreak = true;
+              }
+          }
+          drawPomodoroScreen();
+      }
+      if (btn1Clicked) {
+          if (g_pomSkipBreak) {
+              g_pomState = POM_BREAK_DONE;
+          } else {
+              g_pomRemainingMin = g_pomBreakDuration;
+              g_pomState = POM_BREAK;
+              g_pomLastMinTick = millis();
+          }
+          drawPomodoroScreen();
+      }
+  }
+  else if (g_pomState == POM_BREAK) {
+      if (millis() - g_pomLastMinTick >= 60000) {
+          g_pomRemainingMin--;
+          g_pomLastMinTick += 60000;
+          if (g_pomRemainingMin <= 0) {
+              g_pomState = POM_BREAK_DONE;
+              flashPomodoroScreen();
+              drawPomodoroScreen();
+          } else {
+              drawPomodoroScreen();
+          }
+      }
+      if (longPress1) {
+          g_pomState = POM_BREAK_DONE;
+          drawPomodoroScreen();
+      }
+  }
+  else if (g_pomState == POM_BREAK_DONE) {
+      if (btn2Clicked) {
+          if (g_pomStudyDuration < 60) {
+              g_pomStudyDuration += 5;
+          } else if (g_pomStudyDuration < 120) {
+              g_pomStudyDuration += 15;
+          } else {
+              g_pomStudyDuration = 5;
+          }
+          drawPomodoroScreen();
+      }
+      if (btn1Clicked) {
+          g_pomRemainingMin = g_pomStudyDuration;
+          g_pomState = POM_STUDY;
+          g_pomLastMinTick = millis();
+          drawPomodoroScreen();
+      }
+  }
+}
+
 void loop() {
   btns.poll();
 
@@ -5941,6 +6174,10 @@ void loop() {
   }
 
   switch (mode) {
+    case MODE_POMODORO:
+      handleModePomodoro();
+      break;
+
     case MODE_UPLOAD:
       handleModeUpload();
       break;
