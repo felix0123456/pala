@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>User Profile</h2>
+    <p>Logged in as: <strong style="color: white; font-size: 1.2em;">{{ user.username }}</strong></p>
+    
+    <div style="margin-top: 30px; display: flex; gap: 15px; flex-direction: column;">
+        {% if user.is_admin %}
+        <a href="/admin" style="display: block; text-align: center; background: var(--accent-yellow); color: var(--bg-dark); padding: 12px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: opacity 0.2s;">Admin Dashboard</a>
+        {% endif %}
+        
+        <a href="/logout" style="display: block; text-align: center; background: #ef4444; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: background 0.2s;">Logout</a>
+    </div>
+</div>
+{% endblock %}

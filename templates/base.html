@@ -72,11 +72,22 @@
         }
         .nav {
             margin-bottom: 2rem;
+            display: flex;
+            gap: 20px;
+            background: var(--card-bg);
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         .nav a {
             color: var(--primary-green);
             text-decoration: none;
-            margin: 0 10px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .nav a:hover {
+            color: var(--accent-yellow);
         }
     </style>
 </head>
@@ -84,13 +95,13 @@
     <h1>Pala Cloud Hub</h1>
     <div class="nav">
         {% if user %}
-            <span>Welcome, {{ user.username }}</span> | 
-            {% if user.is_admin %}
-            <a href="/admin" style="color: var(--accent-yellow); font-weight: bold;">Admin Dashboard</a> |
-            {% endif %}
-            <a href="/logout">Logout</a>
+            <a href="/">Dashboard</a>
+            <a href="/library">Library</a>
+            <a href="/devices">Devices</a>
+            <a href="/user" style="margin-left: auto;">User ({{ user.username }})</a>
         {% else %}
-            <a href="/login">Login</a> | <a href="/register">Register</a>
+            <a href="/login">Login</a>
+            <a href="/register">Register</a>
         {% endif %}
     </div>
 

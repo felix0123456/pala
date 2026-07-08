@@ -47,20 +47,13 @@
 </div>
 
 <div class="card" style="margin-top: 20px;">
-    <h2>Upload Book to Cloud</h2>
-    <p class="muted">Upload a book here. It will be downloaded to your Pala on next sync.</p>
-    <form action="/api/upload_book" method="POST" enctype="multipart/form-data" class="stack" id="upload-book-form">
-        <input type="file" name="file" accept=".txt" required style="padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); width: 100%;">
-        <button type="submit" style="margin-top: 15px;">Upload</button>
-    </form>
-    <p id="upload-status" style="color: var(--success); margin-top: 10px; display: none;">Upload complete!</p>
-</div>
-
-<div class="card" style="margin-top: 20px;">
-    <h2>Your Library (Synced to {{ device.name }})</h2>
-    {% if books %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="margin: 0;">Library on {{ device.name }}</h2>
+        <a href="/library" style="color: var(--primary-green); text-decoration: none; font-weight: bold;">Manage Sync &rarr;</a>
+    </div>
+    {% if device.synced_books %}
         <ul style="list-style: none; padding: 0;">
-        {% for book in books %}
+        {% for book in device.synced_books %}
             <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 15px;">
                 <div style="font-size: 24px;">&#128214;</div>
                 <div>
@@ -70,7 +63,7 @@
         {% endfor %}
         </ul>
     {% else %}
-        <p>Your library is empty. Upload a book above or use the fetcher on the home page.</p>
+        <p>No books synced to this device. Go to the Library to sync books.</p>
     {% endif %}
 </div>
 
@@ -84,21 +77,6 @@
             const status = document.getElementById('settings-status');
             status.style.display = 'block';
             setTimeout(() => status.style.display = 'none', 3000);
-        }
-    });
-
-    document.getElementById('upload-book-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const formData = new FormData(form);
-        const res = await fetch(form.action, { method: 'POST', body: formData });
-        if (res.ok) {
-            const status = document.getElementById('upload-status');
-            status.style.display = 'block';
-            setTimeout(() => {
-                status.style.display = 'none';
-                window.location.reload();
-            }, 1500);
         }
     });
 </script>

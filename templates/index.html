@@ -1,48 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<p style="text-align:center; max-width: 500px;">Your centralized platform for Pala device management, auto-fetching ebooks, and OTA updates.</p>
+<p style="text-align:center; max-width: 500px; margin-bottom: 30px;">Welcome to your Pala Cloud Hub Dashboard.</p>
 
 <div class="card">
-    <h2>Automated E-Book Fetcher</h2>
-    <p>Search Project Gutenberg to instantly download and convert a book for your Pala.</p>
-    <input type="text" id="book-query" placeholder="Enter book title or author (e.g. Alice in Wonderland)">
-    <button onclick="fetchBook()">Fetch & Convert</button>
-    <p id="status-msg" style="color: var(--accent-yellow); margin-top: 15px;"></p>
-</div>
-
-<div class="card">
-    <h2>Pair a Device</h2>
-    {% if error %}
-    <p style="color: var(--danger); font-weight: 500;">{{ error }}</p>
-    {% endif %}
-    <p>Enter the 6-digit code shown on your Pala to link it to your account.</p>
-    <form action="/pair" method="POST" style="display: flex; gap: 10px; margin-top: 15px;">
-        <input type="text" name="code" placeholder="6-Digit Code" required maxlength="6" style="max-width: 200px;">
-        <button type="submit">Pair</button>
-    </form>
-</div>
-
-<div class="card">
-    <h2>Your Devices</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="margin: 0;">Your Devices</h2>
+        <a href="/devices" style="color: var(--primary-green); text-decoration: none; font-weight: bold;">Manage &rarr;</a>
+    </div>
     {% if devices %}
         <ul style="list-style: none; padding: 0;">
         {% for device in devices %}
             <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
-                <a href="/device/{{ device.mac_address }}" style="color: var(--text); text-decoration: none;">
+                <a href="/device/{{ device.mac_address }}" style="color: var(--text-main); text-decoration: none; display: block;">
                     <strong>{{ device.name }}</strong> ({{ device.mac_address }})<br>
-                    <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }} | Sleep Timeout: {{ device.sleep_timeout }}s</span>
+                    <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }}</span>
                 </a>
             </li>
         {% endfor %}
         </ul>
-    {% else %}
-        <p>No devices registered yet. Connect your Pala to WiFi to sync!</p>
     {% endif %}
 </div>
 
-<div class="card">
-    <h2>Your Books</h2>
+<div class="card" style="margin-top: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="margin: 0;">Your Library</h2>
+        <a href="/library" style="color: var(--primary-green); text-decoration: none; font-weight: bold;">Manage &rarr;</a>
+    </div>
     {% if books %}
         <ul style="list-style: none; padding: 0;">
         {% for book in books %}
@@ -58,26 +42,7 @@
         {% endfor %}
         </ul>
     {% else %}
-        <p>No books fetched yet.</p>
+        <p>Your library is empty.</p>
     {% endif %}
 </div>
-
-<script>
-    async function fetchBook() {
-        const query = document.getElementById('book-query').value;
-        const status = document.getElementById('status-msg');
-        if(!query) return;
-        status.innerText = "Searching Project Gutenberg...";
-        try {
-            let res = await fetch('/api/fetch?q=' + encodeURIComponent(query));
-            let data = await res.json();
-            status.innerText = data.message || data.error;
-            if(data.message) {
-                setTimeout(() => window.location.reload(), 2000);
-            }
-        } catch (e) {
-            status.innerText = "Error fetching book.";
-        }
-    }
-</script>
 {% endblock %}

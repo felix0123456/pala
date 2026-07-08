@@ -1,7 +1,12 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import relationship
 from database import Base
 
+device_books = Table(
+    "device_books", Base.metadata,
+    Column("device_mac", String, ForeignKey("devices.mac_address", ondelete="CASCADE"), primary_key=True),
+    Column("book_id", Integer, ForeignKey("books.id", ondelete="CASCADE"), primary_key=True)
+)
 class User(Base):
     __tablename__ = "users"
 
@@ -28,6 +33,7 @@ class Device(Base):
 
     owner = relationship("User", back_populates="devices")
     bookmarks = relationship("Bookmark", back_populates="device")
+    synced_books = relationship("Book", secondary=device_books, back_populates="synced_devices")
 
 class Book(Base):
     __tablename__ = "books"
@@ -39,6 +45,7 @@ class Book(Base):
 
     owner = relationship("User", back_populates="books")
     bookmarks = relationship("Bookmark", back_populates="book")
+    synced_devices = relationship("Device", secondary=device_books, back_populates="synced_books")
 
 class Bookmark(Base):
     __tablename__ = "bookmarks"

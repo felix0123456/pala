@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>Pair a Device</h2>
+    {% if error %}
+    <p style="color: #ef4444; font-weight: 500;">{{ error }}</p>
+    {% endif %}
+    <p>Enter the 6-digit code shown on your Pala to link it to your account.</p>
+    <form action="/pair" method="POST" style="display: flex; gap: 10px; margin-top: 15px;">
+        <input type="text" name="code" placeholder="6-Digit Code" required maxlength="6" style="max-width: 200px;">
+        <button type="submit">Pair</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Manage Devices</h2>
+    {% if devices %}
+        <ul style="list-style: none; padding: 0;">
+        {% for device in devices %}
+            <li style="margin-bottom: 20px; padding: 15px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>{{ device.name }}</strong> ({{ device.mac_address }})<br>
+                        <span style="color: var(--text-muted); font-size: 0.9em;">Battery: {{ device.battery_level }}% | Font Size: {{ device.font_size }}</span>
+                    </div>
+                    <a href="/device/{{ device.mac_address }}" style="display: inline-block; padding: 8px 16px; background: rgba(16, 185, 129, 0.2); color: var(--primary-green); border-radius: 8px; text-decoration: none; font-weight: bold; transition: background 0.2s;">Settings &rarr;</a>
+                </div>
+                
+                <form action="/device/{{ device.mac_address }}/rename" method="POST" style="display: flex; gap: 10px; margin-top: 15px;">
+                    <input type="text" name="name" placeholder="Rename device..." value="{{ device.name }}" required style="max-width: 200px;">
+                    <button type="submit" style="width: auto;">Rename</button>
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No devices registered yet. Connect your Pala to WiFi to sync!</p>
+    {% endif %}
+</div>
+{% endblock %}

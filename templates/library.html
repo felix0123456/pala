@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>Automated E-Book Fetcher</h2>
+    <p>Search Project Gutenberg to instantly download and convert a book for your Pala.</p>
+    <input type="text" id="book-query" placeholder="Enter book title or author (e.g. Alice in Wonderland)">
+    <button onclick="fetchBook()">Fetch & Convert</button>
+    <p id="status-msg" style="color: var(--accent-yellow); margin-top: 15px;"></p>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h2>Upload Book to Cloud</h2>
+    <p class="muted">Upload a book manually (.txt).</p>
+    <form action="/api/upload_book" method="POST" enctype="multipart/form-data" class="stack" id="upload-book-form">
+        <input type="file" name="file" accept=".txt" required style="padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); width: 100%; box-sizing: border-box;">
+        <button type="submit" style="margin-top: 15px;">Upload</button>
+    </form>
+    <p id="upload-status" style="color: var(--success); margin-top: 10px; display: none;">Upload complete!</p>
+</div>
+
+<div class="card">
+    <h2>Your Personal Library</h2>
+    <p>Toggle sync for each device below. Books sync to all devices by default when added.</p>
+    {% if books %}
+        <ul style="list-style: none; padding: 0;">
+        {% for book in books %}
+            <li style="margin-bottom: 10px; padding: 10px; border-bottom: 1px solid var(--border);">
+                <strong>{{ book.title }}</strong><br>
+                <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <span style="color: var(--text-muted); font-size: 0.9em; display: block; margin-bottom: 5px;">Sync to Devices:</span>
+                    {% for device in devices %}
+                    <label style="display: inline-flex; align-items: center; gap: 5px; margin-right: 15px; cursor: pointer;">
+                        <input type="checkbox" onchange="toggleSync('{{ device.mac_address }}', {{ book.id }})"
+                               {% if book in device.synced_books %}checked{% endif %}>
+                        {{ device.name }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Your library is empty. Upload a book or use the fetcher.</p>
+    {% endif %}
+</div>
+
+<script>
+    async function fetchBook() {
+        const query = document.getElementById('book-query').value;
+        const status = document.getElementById('status-msg');
+        if(!query) return;
+        status.innerText = "Searching Project Gutenberg...";
+        try {
+            let res = await fetch('/api/fetch?q=' + encodeURIComponent(query));
+            let data = await res.json();
+            status.innerText = data.message || data.error;
+            if(data.message) {
+                setTimeout(() => window.location.reload(), 2000);
+            }
+        } catch (e) {
+            status.innerText = "Error fetching book.";
+        }
+    }
+
+    document.getElementById('upload-book-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const res = await fetch(form.action, { method: 'POST', body: formData });
+        if (res.ok) {
+            const status = document.getElementById('upload-status');
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+                window.location.reload();
+            }, 1500);
+        }
+    });
+
+    async function toggleSync(mac_address, book_id) {
+        try {
+            let res = await fetch(`/device/${mac_address}/toggle_sync/${book_id}`, { method: 'POST' });
+            if (!res.ok) {
+                alert("Failed to toggle sync");
+                window.location.reload();
+            }
+        } catch (e) {
+            alert("Error toggling sync");
+        }
+    }
+</script>
+{% endblock %}

@@ -58,9 +58,39 @@ async def index(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
-    # Reload user relationships
     user = db.query(models.User).filter(models.User.id == user.id).first()
-    return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": user.devices, "books": user.books})
+    devices = user.devices
+    if len(devices) == 0:
+        return RedirectResponse(url="/devices", status_code=status.HTTP_302_FOUND)
+    elif len(devices) == 1:
+        return RedirectResponse(url=f"/device/{devices[0].mac_address}", status_code=status.HTTP_302_FOUND)
+    else:
+        return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": devices, "books": user.books})
+
+@app.get("/library", response_class=HTMLResponse)
+async def library_view(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    user = db.query(models.User).filter(models.User.id == user.id).first()
+    return templates.TemplateResponse(request=request, name="library.html", context={"user": user, "books": user.books, "devices": user.devices})
+
+@app.get("/devices", response_class=HTMLResponse)
+async def devices_view(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    user = db.query(models.User).filter(models.User.id == user.id).first()
+    return templates.TemplateResponse(request=request, name="devices.html", context={"user": user, "devices": user.devices})
+
+@app.get("/user", response_class=HTMLResponse)
+async def user_view(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    user = db.query(models.User).filter(models.User.id == user.id).first()
+    return templates.TemplateResponse(request=request, name="user.html", context={"user": user})
+
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_get(request: Request):
@@ -125,7 +155,7 @@ async def pair_device(request: Request, code: str = Form(...), db: Session = Dep
     device.user_id = user.id
     device.pairing_code = None
     db.commit()
-    return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/devices", status_code=status.HTTP_302_FOUND)
 
 @app.get("/device/{mac_address}", response_class=HTMLResponse)
 async def device_view(request: Request, mac_address: str, db: Session = Depends(get_db)):
@@ -150,6 +180,36 @@ async def update_device_settings(mac_address: str, font_size: int = Form(...), s
     device.font_size = font_size
     device.sleep_timeout = sleep_timeout
     device.line_gap = line_gap
+    db.commit()
+    return {"status": "ok"}
+
+@app.post("/device/{mac_address}/rename")
+async def rename_device(mac_address: str, name: str = Form(...), request: Request = None, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    if not device:
+        raise HTTPException(status_code=404)
+    device.name = name
+    db.commit()
+    return RedirectResponse(url="/devices", status_code=status.HTTP_302_FOUND)
+
+@app.post("/device/{mac_address}/toggle_sync/{book_id}")
+async def toggle_device_sync(mac_address: str, book_id: int, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
+    book = db.query(models.Book).filter(models.Book.id == book_id, models.Book.user_id == user.id).first()
+    if not device or not book:
+        raise HTTPException(status_code=404)
+    
+    if book in device.synced_books:
+        device.synced_books.remove(book)
+    else:
+        device.synced_books.append(book)
+    
     db.commit()
     return {"status": "ok"}
 
@@ -189,6 +249,9 @@ async def fetch_book(q: str, request: Request, db: Session = Depends(get_db)):
                 f.write(text_content)
             
             db_book = models.Book(title=title, file_path=filepath, user_id=user.id)
+            # auto-sync to all user devices
+            user_reloaded = db.query(models.User).filter(models.User.id == user.id).first()
+            db_book.synced_devices = user_reloaded.devices
             db.add(db_book)
             db.commit()
 
@@ -212,6 +275,9 @@ async def upload_book(request: Request, file: UploadFile = File(...), db: Sessio
     existing = db.query(models.Book).filter(models.Book.user_id == user.id, models.Book.title == filename).first()
     if not existing:
         db_book = models.Book(title=filename, file_path=filepath, user_id=user.id)
+        # auto-sync
+        user_reloaded = db.query(models.User).filter(models.User.id == user.id).first()
+        db_book.synced_devices = user_reloaded.devices
         db.add(db_book)
         db.commit()
     
@@ -377,9 +443,8 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
     if not device or not device.user_id:
         raise HTTPException(status_code=401, detail="Device not registered")
     
-    # Return settings and books that belong to the user
-    user_books = db.query(models.Book).filter(models.Book.user_id == device.user_id).all()
-    books_data = [{"id": b.id, "title": b.title} for b in user_books]
+    # Return settings and explicitly synced books
+    books_data = [{"id": b.id, "title": b.title} for b in device.synced_books]
 
     return {
         "font_size": device.font_size,
