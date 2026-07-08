@@ -26,7 +26,7 @@ jobs:
         run: |
           arduino-cli lib install "U8g2_for_Adafruit_GFX"
           arduino-cli lib install "Adafruit GFX Library"
-          # heltec-eink-modules is usually part of the Heltec BSP, if it's external, add it here.
+          arduino-cli lib install "heltec-eink-modules"
 
       - name: Compile Firmware
         run: |
