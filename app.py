@@ -302,7 +302,7 @@ async def device_apps_view(request: Request, mac_address: str, db: Session = Dep
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if not device:
         return RedirectResponse("/devices", status_code=303)
-    return templates.TemplateResponse("apps.html", {"request": request, "user": user, "device": device})
+    return templates.TemplateResponse(request=request, name="apps.html", context={"user": user, "device": device})
 
 @app.post("/device/{mac_address}/apps")
 async def update_device_apps(

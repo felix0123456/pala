@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.0"
+#define FW_VERSION "1.11.1"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
