@@ -27,6 +27,7 @@ jobs:
           arduino-cli lib install "U8g2_for_Adafruit_GFX"
           arduino-cli lib install "Adafruit GFX Library"
           arduino-cli lib install "heltec-eink-modules"
+          arduino-cli lib install "ArduinoJson"
 
       - name: Compile Firmware
         run: |
