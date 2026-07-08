@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.9.4"
+#define FW_VERSION "1.9.5"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3251,7 +3251,8 @@ bool syncWithCloud() {
   u8g2.print("Syncing with server...");
   display.update();
 
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure();
   HTTPClient http;
   String mac = WiFi.macAddress();
   
@@ -3261,7 +3262,7 @@ bool syncWithCloud() {
   String pairingCode = "";
   int retryCount = 0;
   while (true) {
-    http.begin(client, "http://pala.felixresch.com/api/device/register");
+    http.begin(client, "https://pala.felixresch.com/api/device/register");
     http.addHeader("Content-Type", "application/json");
     int httpCode = http.POST("{\"mac_address\":\"" + mac + "\"}");
     if (httpCode == 200) {
@@ -3353,7 +3354,7 @@ bool syncWithCloud() {
   display.update();
   
   // Pull
-  http.begin(client, "http://pala.felixresch.com/api/sync/pull?mac=" + mac);
+  http.begin(client, "https://pala.felixresch.com/api/sync/pull?mac=" + mac);
   int httpCode = http.GET();
   if (httpCode == 200) {
     String payload = http.getString();
@@ -3448,9 +3449,10 @@ bool syncWithCloud() {
              u8g2.print("Downloading book...");
              display.update();
 
-             WiFiClient dlClient;
+             WiFiClientSecure dlClient;
+             dlClient.setInsecure();
              HTTPClient httpDl;
-             httpDl.begin(dlClient, "http://pala.felixresch.com/api/book/" + String(b_id) + "?mac=" + mac);
+             httpDl.begin(dlClient, "https://pala.felixresch.com/api/book/" + String(b_id) + "?mac=" + mac);
              int dlCode = httpDl.GET();
              if (dlCode == 200) {
                File f = FS.open(fpath, "w");
@@ -3468,7 +3470,7 @@ bool syncWithCloud() {
   http.end();
 
   // Push
-  http.begin(client, "http://pala.felixresch.com/api/sync/push");
+  http.begin(client, "https://pala.felixresch.com/api/sync/push");
   http.addHeader("Content-Type", "application/json");
   ALLOC_JSON_DOC(pushDoc, 2048);
   pushDoc["mac_address"] = mac;
@@ -4419,10 +4421,11 @@ void performOTAUpdate() {
   }
   
   drawCenter("System Update", "Checking for update...");
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure();
   HTTPClient http;
   
-  String url = "http://pala.felixresch.com/api/firmware/check?version=" + String(FW_VERSION);
+  String url = "https://pala.felixresch.com/api/firmware/check?version=" + String(FW_VERSION);
   if (!http.begin(client, url)) {
     return;
   }
@@ -4506,7 +4509,7 @@ void performOTAUpdate() {
     return;
   }
   
-  String fullBinUrl = "http://pala.felixresch.com" + binUrl;
+  String fullBinUrl = "https://pala.felixresch.com" + binUrl;
   drawCenter("Downloading Update...", latestVer.c_str());
   if (!http.begin(client, fullBinUrl)) {
     drawCenter("System Update", "Failed to open bin url.");
