@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.9.3"
+#define FW_VERSION "1.9.4"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -2982,19 +2982,8 @@ void startUploadServicesOnly() {
   Serial.println("Starting upload services (WiFi + WebServer + BLE)...");
 
   bool connected = false;
-  if (g_wifiSsid.length() > 0) {
-    WiFi.disconnect(true, true);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(g_wifiSsid.c_str(), g_wifiPass.c_str());
-
-    unsigned long startConn = millis();
-    while (millis() - startConn < 12000) {
-      if (WiFi.status() == WL_CONNECTED) {
-        connected = true;
-        break;
-      }
-      delay(200);
-    }
+  if (g_wifiCount > 0) {
+    connected = connectSTAWithMulti();
   }
 
   if (!connected) {
@@ -3240,7 +3229,7 @@ void stopUploadServicesOnly() {
 }
 
 bool syncWithCloud() {
-  if (g_wifiSsid.length() == 0) return false;
+  if (g_wifiCount == 0) return false;
 
   prepareMenuFrame();
 
@@ -3253,21 +3242,7 @@ bool syncWithCloud() {
   u8g2.print("Connecting to WiFi...");
   display.update();
 
-  WiFi.disconnect(true, true);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(g_wifiSsid.c_str(), g_wifiPass.c_str());
-
-  bool connected = false;
-  unsigned long startConn = millis();
-  while (millis() - startConn < 15000) {
-    if (WiFi.status() == WL_CONNECTED) {
-      connected = true;
-      break;
-    }
-    delay(200);
-  }
-
-  if (!connected) {
+  if (!connectSTAWithMulti()) {
     WiFi.disconnect(true, true);
     return false;
   }
@@ -3284,11 +3259,13 @@ bool syncWithCloud() {
   bool alreadyRegistered = false;
   bool gotCode = false;
   String pairingCode = "";
+  int retryCount = 0;
   while (true) {
     http.begin(client, "http://pala.felixresch.com/api/device/register");
     http.addHeader("Content-Type", "application/json");
     int httpCode = http.POST("{\"mac_address\":\"" + mac + "\"}");
     if (httpCode == 200) {
+      retryCount = 0; // Reset retry on success
       String payload = http.getString();
       ALLOC_JSON_DOC(regDoc, 512);
       DeserializationError err = deserializeJson(regDoc, payload);
@@ -3327,6 +3304,13 @@ bool syncWithCloud() {
         alreadyRegistered = true;
         http.end();
         break; // Registered!
+      }
+    } else {
+      if (retryCount < 3) {
+        retryCount++;
+        http.end();
+        delay(2000);
+        continue;
       }
     }
     http.end();
@@ -3544,6 +3528,8 @@ void startUploadMode() {
   g_uploadStartMs = millis();
 
   prepareMenuFrame();
+  
+  performOTAUpdate();
   
   if (syncWithCloud()) {
     stopUploadModeToLibrary();
@@ -4429,31 +4415,21 @@ void drawChessScreen() {
 void performOTAUpdate() {
   drawCenter("System Update", "Connecting to Wi-Fi...");
   if (!connectSTAWithMulti()) {
-    drawCenter("System Update", "Wi-Fi failed. Press to exit.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
     return;
   }
   
   drawCenter("System Update", "Checking for update...");
-  WiFiClientSecure client;
-  client.setInsecure();
+  WiFiClient client;
   HTTPClient http;
   
-  String url = "https://raw.githubusercontent.com/felix0123456/pala/main/update.json";
+  String url = "http://pala.felixresch.com/api/firmware/check?version=" + String(FW_VERSION);
   if (!http.begin(client, url)) {
-    drawCenter("System Update", "Failed to connect to server.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
     return;
   }
   
   int code = http.GET();
   if (code != 200) {
     http.end();
-    drawCenter("System Update", "Server error. Press to exit.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
     return;
   }
   
@@ -4463,27 +4439,78 @@ void performOTAUpdate() {
   ALLOC_JSON_DOC(doc, 1024);
   DeserializationError err = deserializeJson(doc, payload);
   if (err) {
-    drawCenter("System Update", "Parse error. Press to exit.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
     return;
   }
   
-  String latestVer = doc["version"].as<String>();
-  String binUrl = doc["binUrl"].as<String>();
-  
-  if (latestVer == FW_VERSION) {
-    drawCenter("System Update", "Already on latest version.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
+  bool updateAvailable = doc["update_available"];
+  if (!updateAvailable) {
     return;
   }
   
+  String latestVer = doc["latest_version"].as<String>();
+  String binUrl = doc["download_url"].as<String>();
+  
+  bool install = false;
+  bool selectedYes = true;
+  
+  while (true) {
+    prepareMenuFrame();
+    u8g2.setFont(BOLD_FONT);
+    u8g2.setCursor(MARGIN_X, 30);
+    u8g2.print("New firmware available");
+    
+    u8g2.setFont(MAIN_FONT);
+    u8g2.setCursor(MARGIN_X, 50);
+    u8g2.print(("Version: " + latestVer).c_str());
+    
+    u8g2.setCursor(MARGIN_X, 70);
+    u8g2.print("Install now?");
+    
+    u8g2.setFont(u8g2_font_5x8_tf);
+    u8g2.setCursor(MARGIN_X, 114);
+    u8g2.print("1x-switch between yes and no, 2x-confirm");
+    
+    u8g2.setFont(MAIN_FONT);
+    if (selectedYes) {
+      gfx.fillRect(MARGIN_X + 20, 80, 40, 20, 1);
+      u8g2.setForegroundColor(0);
+      u8g2.drawStr(MARGIN_X + 30, 95, "Yes");
+      u8g2.setForegroundColor(1);
+      
+      gfx.drawRect(MARGIN_X + 80, 80, 40, 20, 1);
+      u8g2.drawStr(MARGIN_X + 93, 95, "No");
+    } else {
+      gfx.drawRect(MARGIN_X + 20, 80, 40, 20, 1);
+      u8g2.drawStr(MARGIN_X + 30, 95, "Yes");
+      
+      gfx.fillRect(MARGIN_X + 80, 80, 40, 20, 1);
+      u8g2.setForegroundColor(0);
+      u8g2.drawStr(MARGIN_X + 93, 95, "No");
+      u8g2.setForegroundColor(1);
+    }
+    
+    display.update();
+    
+    btns.poll();
+    if (btns.b1.shortClick || btns.b2.shortClick) {
+      selectedYes = !selectedYes;
+    }
+    if (btns.b1.doubleClick || btns.b2.doubleClick) {
+      install = selectedYes;
+      break;
+    }
+    delay(50);
+  }
+  
+  if (!install) {
+    return;
+  }
+  
+  String fullBinUrl = "http://pala.felixresch.com" + binUrl;
   drawCenter("Downloading Update...", latestVer.c_str());
-  if (!http.begin(client, binUrl)) {
+  if (!http.begin(client, fullBinUrl)) {
     drawCenter("System Update", "Failed to open bin url.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
+    delay(2000);
     return;
   }
   
@@ -4491,8 +4518,7 @@ void performOTAUpdate() {
   if (code != 200) {
     http.end();
     drawCenter("System Update", "Download error.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
+    delay(2000);
     return;
   }
   
@@ -4500,16 +4526,14 @@ void performOTAUpdate() {
   if (contentLength <= 0) {
     http.end();
     drawCenter("System Update", "Invalid file size.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
+    delay(2000);
     return;
   }
   
   if (!Update.begin(contentLength, U_FLASH)) {
     http.end();
     drawCenter("System Update", "Not enough space.");
-    while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-    exitSpotifyMode();
+    delay(2000);
     return;
   }
   
@@ -4523,13 +4547,13 @@ void performOTAUpdate() {
       ESP.restart();
     } else {
       drawCenter("System Update", "Update failed.");
+      delay(2000);
     }
   } else {
     drawCenter("System Update", "Download interrupted.");
+    delay(2000);
   }
-  
-  while (!btns.b1.shortClick && !btns.b2.shortClick && !btns.b2.shortClick) { delay(10); btns.poll(); }
-  exitSpotifyMode();
+  http.end();
 }
 
 void initChessGame() {
