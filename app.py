@@ -47,9 +47,10 @@ with engine.connect() as conn:
         "spotify_client_secret VARCHAR",
         "spotify_refresh_token VARCHAR",
         "spotify_screensaver BOOLEAN DEFAULT FALSE",
-        "chess_elo INTEGER",
+        "chess_elo INTEGER DEFAULT 1500",
         "cal_url VARCHAR",
-        "tz_offset INTEGER DEFAULT 0"
+        "tz_offset INTEGER DEFAULT 0",
+        "firmware_version VARCHAR"
     ]
     for col in new_columns:
         try:
