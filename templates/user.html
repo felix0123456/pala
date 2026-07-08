@@ -11,7 +11,7 @@
     </div>
     
     <div class="stack">
-        {% if getattr(user, 'is_admin', False) %}
+        {% if user.is_admin %}
         <a href="/admin" class="nav-btn" style="text-align: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">
             &#9881; Admin Dashboard
         </a>

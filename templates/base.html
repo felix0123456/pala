@@ -136,7 +136,7 @@
                 <a href='/library' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#128218;</span> Library & Uploader</div>
                 </a>
-                {% if getattr(user, 'is_admin', False) %}
+                {% if user.is_admin %}
                 <a href='/admin' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#9881;</span> Admin Dashboard</div>
                 </a>

@@ -95,7 +95,7 @@
                         <td>{{ u.id }}</td>
                         <td style="font-weight: 500;">{{ u.username }}</td>
                         <td>
-                            {% if getattr(u, 'is_admin', False) %}
+                            {% if u.is_admin %}
                                 <span class="badge admin">Admin</span>
                             {% else %}
                                 <span class="badge">User</span>
