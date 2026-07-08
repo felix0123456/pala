@@ -1,11 +1,9 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block content %}
-<div class="card">
-    <div class="flex-between" style="margin-bottom: 16px;">
-        <h2 style="margin: 0;">Your Todo List</h2>
-        <a href="/todos" style="font-weight: 500;">Manage &rarr;</a>
-    </div>
+<div class="card" style="max-width: 800px; margin: 0 auto;">
+    <h2>Your Todo List</h2>
+    <p class="muted">Manage your tasks and sync them with your Pala device.</p>
     
     <div style="display: flex; gap: 12px; margin-bottom: 24px;">
         <input type="text" id="new-todo" placeholder="What needs to be done?" onkeypress="if(event.key === 'Enter') addTodo()">
@@ -13,7 +11,7 @@
     </div>
 
     <ul class="list-group" id="todo-list">
-        {% for todo in user.todos %}
+        {% for todo in todos %}
         <li class="flex-between" id="todo-{{ todo.id }}">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <input type="checkbox" {% if todo.checked %}checked{% endif %} onchange="toggleTodo({{ todo.id }}, this.checked, '{{ todo.text|escape }}')">
@@ -23,57 +21,6 @@
         </li>
         {% endfor %}
     </ul>
-</div>
-
-<div class="card">
-    <div class="flex-between" style="margin-bottom: 16px;">
-        <h2 style="margin: 0;">Your Devices</h2>
-        <a href="/devices" style="font-weight: 500;">Manage &rarr;</a>
-    </div>
-    {% if devices %}
-        <ul class="list-group">
-        {% for device in devices %}
-            <li>
-                <a href="/device/{{ device.mac_address }}" style="display: flex; justify-content: space-between; align-items: center; color: var(--text);">
-                    <div>
-                        <div style="font-weight: 600; font-size: 16px;">{{ device.name }}</div>
-                        <div style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">{{ device.mac_address }}</div>
-                    </div>
-                    <div style="text-align: right; color: var(--text-muted); font-size: 13px;">
-                        <div>&#128267; {{ device.battery_level }}%</div>
-                        <div>Font: {{ device.font_size }}</div>
-                    </div>
-                </a>
-            </li>
-        {% endfor %}
-        </ul>
-    {% endif %}
-</div>
-
-<div class="card">
-    <div class="flex-between" style="margin-bottom: 16px;">
-        <h2 style="margin: 0;">Your Library</h2>
-        <a href="/library" style="font-weight: 500;">Manage &rarr;</a>
-    </div>
-    {% if books %}
-        <ul class="list-group">
-        {% for book in books %}
-            <li>
-                <div style="font-weight: 600;">{{ book.title }}</div>
-                <div style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
-                    Bookmarks: 
-                    {% for bm in book.bookmarks %}
-                        <span style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-right: 4px;">Page {{ bm.page_index }}</span>
-                    {% else %}
-                        None
-                    {% endfor %}
-                </div>
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p class="muted">Your library is empty.</p>
-    {% endif %}
 </div>
 
 <script>
@@ -97,6 +44,7 @@
                 li.className = 'flex-between';
                 li.id = 'todo-' + todo.id;
                 
+                // Escape simple quotes for JS string
                 const safeText = todo.text.replace(/'/g, "\\'");
                 
                 li.innerHTML = `

@@ -111,6 +111,13 @@ async def user_view(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request=request, name="user.html", context={"user": user})
 
 
+@app.get("/todos", response_class=HTMLResponse)
+async def todos_page(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse(request=request, name="todos.html", context={"user": user, "todos": user.todos})
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_get(request: Request):
     return templates.TemplateResponse(request=request, name="login.html")
@@ -367,6 +374,50 @@ async def upload_book(request: Request, file: UploadFile = File(...), db: Sessio
     
     return {"status": "ok"}
 
+# ----------------- TODOS API -----------------
+
+class TodoData(BaseModel):
+    text: str
+    checked: Optional[bool] = False
+
+@app.post("/api/todos")
+async def add_todo(data: TodoData, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    todo = models.TodoItem(user_id=user.id, text=data.text, checked=data.checked)
+    db.add(todo)
+    db.commit()
+    db.refresh(todo)
+    return {"id": todo.id, "text": todo.text, "checked": todo.checked}
+
+@app.put("/api/todos/{todo_id}")
+async def update_todo(todo_id: int, data: TodoData, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    todo = db.query(models.TodoItem).filter(models.TodoItem.id == todo_id, models.TodoItem.user_id == user.id).first()
+    if not todo:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    todo.text = data.text
+    if data.checked is not None:
+        todo.checked = data.checked
+    db.commit()
+    return {"status": "ok"}
+
+@app.delete("/api/todos/{todo_id}")
+async def delete_todo(todo_id: int, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    todo = db.query(models.TodoItem).filter(models.TodoItem.id == todo_id, models.TodoItem.user_id == user.id).first()
+    if not todo:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    db.delete(todo)
+    db.commit()
+    return {"status": "ok"}
+
+
 # ----------------- ADMIN DASHBOARD -----------------
 
 def get_current_admin_web(request: Request, db: Session = Depends(get_db)):
@@ -482,6 +533,7 @@ class SyncPushData(BaseModel):
     cal_url: Optional[str] = None
     tz_offset: Optional[int] = None
     firmware_version: Optional[str] = None
+    todos: Optional[list] = None
 
 @app.post("/api/device/register")
 async def register_device(data: DeviceRegister, db: Session = Depends(get_db)):
@@ -539,6 +591,19 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
             )
             db.add(new_bm)
 
+    if data.todos is not None:
+        user = device.owner
+        for t_data in data.todos:
+            text = t_data.get("text")
+            checked = t_data.get("checked", False)
+            if text:
+                existing = db.query(models.TodoItem).filter(models.TodoItem.user_id == user.id, models.TodoItem.text == text).first()
+                if existing:
+                    existing.checked = checked
+                else:
+                    new_todo = models.TodoItem(user_id=user.id, text=text, checked=checked)
+                    db.add(new_todo)
+
     db.commit()
     return {"status": "ok"}
 
@@ -568,6 +633,10 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         "bookmarks": [
             {"book_id": bm.book_id, "title": bm.book.title, "page_index": bm.page_index} 
             for bm in device.bookmarks if bm.book
+        ],
+        "todos": [
+            {"id": t.id, "text": t.text, "checked": t.checked}
+            for t in device.owner.todos
         ]
     }
 

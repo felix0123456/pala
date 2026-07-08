@@ -17,6 +17,7 @@ class User(Base):
 
     devices = relationship("Device", back_populates="owner")
     books = relationship("Book", back_populates="owner")
+    todos = relationship("TodoItem", back_populates="owner", cascade="all, delete-orphan")
 
 class Device(Base):
     __tablename__ = "devices"
@@ -68,3 +69,13 @@ class Bookmark(Base):
 
     device = relationship("Device", back_populates="bookmarks")
     book = relationship("Book", back_populates="bookmarks")
+
+class TodoItem(Base):
+    __tablename__ = "todos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    text = Column(String)
+    checked = Column(Boolean, default=False)
+
+    owner = relationship("User", back_populates="todos")
