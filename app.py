@@ -184,8 +184,7 @@ async def device_view(request: Request, mac_address: str, db: Session = Depends(
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if not device:
         return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    
-    return templates.TemplateResponse(request=request, name="device.html", context={"device": device, "books": user.books})
+    return templates.TemplateResponse(request=request, name="device.html", context={"device": device, "books": user.books, "user": user})
 
 @app.post("/api/device/{mac_address}/settings")
 async def update_device_settings(
