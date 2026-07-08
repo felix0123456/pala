@@ -123,11 +123,11 @@
                 <a href='/devices' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#128241;</span> Device</div>
                     {% if device %}
-                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: *****{{ device.name }}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: {{ device.name }}</div>
                     {% elif user.devices and user.devices|length > 0 %}
-                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: *****{{ user.devices[0].name }}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: {{ user.devices[0].name }}</div>
                     {% else %}
-                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: *****None</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: None</div>
                     {% endif %}
                 </a>
                 <a href='/' class='nav-btn'>
