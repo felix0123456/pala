@@ -65,6 +65,14 @@ Provide docstrings for all public modules, functions, classes, and methods.
 Naming: CamelCase for classes, snake_case for variables/functions. Avoid shadowing built-ins.
 Summary for the AI Agent
 When working on this project:
+9. Git convention
+After changing any code for the server, push to github, if only server code changed, do not update version or push as v*.*.*.
+
+Always work on the latest firmware version for the pala.
+
+For any firmware code changes decide based on the severity of the change wether to iterate the last or middle version number, if only subtle changes were made, change only last digit.
+If asked to "upload" or "push", push to github with origin v*.*.*
+
 
 Always check whether a task applies to the C++ Firmware or the Python FastAPI Server.
 Remember the Dual Button limitation: Deep sleep wake is ONLY on GPIO 0 (BTN1).

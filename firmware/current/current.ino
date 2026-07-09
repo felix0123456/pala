@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.1"
+#define FW_VERSION "1.11.2"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -328,9 +328,14 @@ enum SettingsEntryType {
   SET_ENTRY_NIGHT_MODE,
   SET_ENTRY_TEXT_SIZE,
   SET_ENTRY_SCREENSAVER,
-  SET_ENTRY_MEMORY
+  SET_ENTRY_MEMORY,
+  SET_ENTRY_APP_TODO,
+  SET_ENTRY_APP_CAL,
+  SET_ENTRY_APP_SPOT,
+  SET_ENTRY_APP_CHESS,
+  SET_ENTRY_APP_POM
 };
-static const int SETTINGS_COUNT = 7;
+static const int SETTINGS_COUNT = 12;
 static int selectedSettingItem = 1;
 
 static bool g_servicesActive = false;
@@ -3370,7 +3375,7 @@ bool syncWithCloud() {
   int httpCode = http.GET();
   if (httpCode == 200) {
     String payload = http.getString();
-    ALLOC_JSON_DOC(doc, 4096);
+    ALLOC_JSON_DOC(doc, 8192);
     DeserializationError error = deserializeJson(doc, payload);
     if (!error) {
       if (doc.containsKey("font_size")) {
@@ -3434,28 +3439,28 @@ bool syncWithCloud() {
           g_timezoneOffsetHours = tzo;
           prefs.putInt("cfg_tz_offset", tzo);
        }
-       if (doc.containsKey("app_todo")) {
-          bool val = doc["app_todo"];
+        if (doc.containsKey("app_todo")) {
+          bool val = doc["app_todo"].as<bool>();
           g_appTodo = val;
           prefs.putBool("cfg_app_todo", val);
        }
        if (doc.containsKey("app_cal")) {
-          bool val = doc["app_cal"];
+          bool val = doc["app_cal"].as<bool>();
           g_appCal = val;
           prefs.putBool("cfg_app_cal", val);
        }
        if (doc.containsKey("app_spot")) {
-          bool val = doc["app_spot"];
+          bool val = doc["app_spot"].as<bool>();
           g_appSpot = val;
           prefs.putBool("cfg_app_spot", val);
        }
        if (doc.containsKey("app_chess")) {
-          bool val = doc["app_chess"];
+          bool val = doc["app_chess"].as<bool>();
           g_appChess = val;
           prefs.putBool("cfg_app_chess", val);
        }
        if (doc.containsKey("app_pom")) {
-          bool val = doc["app_pom"];
+          bool val = doc["app_pom"].as<bool>();
           g_appPom = val;
           prefs.putBool("cfg_app_pom", val);
        }
@@ -3692,6 +3697,21 @@ void drawSettings() {
         label = "Storage: " + String(pct) + "% (" + String(booksSize / 1024) + "K books, " + String(freeSize / 1024) + "K free)";
         break;
       }
+      case SET_ENTRY_APP_TODO:
+        label = "App Todo: " + String(g_appTodo ? "Show" : "Hide");
+        break;
+      case SET_ENTRY_APP_CAL:
+        label = "App Cal: " + String(g_appCal ? "Show" : "Hide");
+        break;
+      case SET_ENTRY_APP_SPOT:
+        label = "App Spot: " + String(g_appSpot ? "Show" : "Hide");
+        break;
+      case SET_ENTRY_APP_CHESS:
+        label = "App Chess: " + String(g_appChess ? "Show" : "Hide");
+        break;
+      case SET_ENTRY_APP_POM:
+        label = "App Pom: " + String(g_appPom ? "Show" : "Hide");
+        break;
     }
     drawMenuBulletRow(y, label, i == selectedSettingItem, i == selectedSettingItem);
     y += lineH;
@@ -3754,6 +3774,31 @@ void handleModeSettings() {
         break;
       case SET_ENTRY_MEMORY:
         // Double clicking storage redraws to refresh details
+        drawSettings();
+        break;
+      case SET_ENTRY_APP_TODO:
+        g_appTodo = !g_appTodo;
+        prefs.putBool("cfg_app_todo", g_appTodo);
+        drawSettings();
+        break;
+      case SET_ENTRY_APP_CAL:
+        g_appCal = !g_appCal;
+        prefs.putBool("cfg_app_cal", g_appCal);
+        drawSettings();
+        break;
+      case SET_ENTRY_APP_SPOT:
+        g_appSpot = !g_appSpot;
+        prefs.putBool("cfg_app_spot", g_appSpot);
+        drawSettings();
+        break;
+      case SET_ENTRY_APP_CHESS:
+        g_appChess = !g_appChess;
+        prefs.putBool("cfg_app_chess", g_appChess);
+        drawSettings();
+        break;
+      case SET_ENTRY_APP_POM:
+        g_appPom = !g_appPom;
+        prefs.putBool("cfg_app_pom", g_appPom);
         drawSettings();
         break;
     }
@@ -6374,6 +6419,7 @@ void loop() {
       }
     } else if (mode == MODE_SETTINGS) {
       mode = MODE_LIBRARY;
+      loadBooks();
       drawLibrary();
     } else if (mode == MODE_ABOUT) {
       mode = MODE_SETTINGS;
