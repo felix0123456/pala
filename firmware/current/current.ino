@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.11"
+#define FW_VERSION "1.11.12"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3441,8 +3441,8 @@ bool syncWithCloud(bool silent = false, bool background = false) {
                 httpDl.writeToStream(&f);
                 f.close();
                 prefs.putInt("cfg_scr_updated", new_ts);
-                g_screensaverMode = 1;
-                prefs.putInt("cfg_scr_mode", 1);
+                g_screensaverMode = 0;
+                prefs.putInt("cfg_scr_mode", 0);
               }
             }
             httpDl.end();

@@ -46,9 +46,10 @@
                 <div>
                     <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">Screensaver Mode</label>
                     <select name="scr_mode" style="width: 100%;">
-                        <option value="0" {% if device.screensaver_mode == 0 %}selected{% endif %}>Default</option>
-                        <option value="1" {% if device.screensaver_mode == 1 %}selected{% endif %}>Custom Bin</option>
-                        <option value="2" {% if device.screensaver_mode == 2 %}selected{% endif %}>Spotify</option>
+                        <option value="0" {% if device.screensaver_mode == 0 %}selected{% endif %}>Default Image / Custom Bin</option>
+                        <option value="1" {% if device.screensaver_mode == 1 %}selected{% endif %}>Spotify</option>
+                        <option value="2" {% if device.screensaver_mode == 2 %}selected{% endif %}>Daily Board</option>
+                        <option value="3" {% if device.screensaver_mode == 3 %}selected{% endif %}>Clock / Calendar</option>
                     </select>
                 </div>
             </div>
