@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional
+import urllib.parse
+import asyncio
+import aiohttp
 
 import models
 from database import engine, get_db
@@ -355,48 +358,95 @@ async def toggle_device_sync(mac_address: str, book_id: int, request: Request, d
 
 # ----------------- BOOK FETCHING & UPLOADING -----------------
 
-@app.get("/api/fetch")
-async def fetch_book(q: str, request: Request, db: Session = Depends(get_db)):
+@app.get("/api/search/gutendex")
+async def search_gutendex(q: str, request: Request, db: Session = Depends(get_db)):
     user = auth.get_current_user(request, db)
     if not user:
         return {"error": "Not authenticated"}
 
     try:
-        res = requests.get(f"https://gutendex.com/books?search={q}")
+        res = requests.get(f"https://gutendex.com/books?search={urllib.parse.quote(q)}")
         data = res.json()
-        if data.get("count", 0) > 0:
-            book_data = data["results"][0]
-            title = book_data["title"]
-            
-            # For Project Gutenberg, try to get the text format URL
+        results = []
+        for book_data in data.get("results", [])[:5]:
+            # Try to get plain text URL
             text_url = None
-            formats = book_data.get("formats", {})
-            for fmt, url in formats.items():
+            for fmt, url in book_data.get("formats", {}).items():
                 if "text/plain" in fmt:
                     text_url = url
                     break
             
-            if not text_url:
-                return {"error": "No plain text format available for this book."}
-            
-            # Fetch the actual text
-            text_res = requests.get(text_url)
-            text_content = text_res.text
-            
-            filename = f"gutenberg_{book_data['id']}.txt"
-            filepath = os.path.join(BOOKS_DIR, filename)
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(text_content)
-            
-            db_book = models.Book(title=title, file_path=filepath, user_id=user.id)
-            # auto-sync to all user devices
-            user_reloaded = db.query(models.User).filter(models.User.id == user.id).first()
-            db_book.synced_devices = user_reloaded.devices
-            db.add(db_book)
-            db.commit()
+            if text_url:
+                authors = ", ".join([a["name"] for a in book_data.get("authors", [])])
+                results.append({
+                    "id": f"gutenberg_{book_data['id']}",
+                    "title": book_data["title"],
+                    "authors": authors,
+                    "source": "Project Gutenberg",
+                    "download_url": text_url
+                })
+        return {"results": results}
+    except Exception as e:
+        return {"error": str(e)}
 
-            return {"message": f"Successfully fetched '{title}'. It will sync to your device."}
-        return {"error": "Book not found."}
+@app.get("/api/search/openlibrary")
+async def search_openlibrary(q: str, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return {"error": "Not authenticated"}
+
+    try:
+        res = requests.get(f"https://openlibrary.org/search.json?q={urllib.parse.quote(q)}&has_fulltext=true&limit=10")
+        data = res.json()
+        results = []
+        for doc in data.get("docs", []):
+            ia_list = doc.get("ia")
+            if ia_list:
+                ia_id = ia_list[0]
+                text_url = f"https://archive.org/stream/{ia_id}/{ia_id}_djvu.txt"
+                authors = ", ".join(doc.get("author_name", []))
+                results.append({
+                    "id": f"openlibrary_{ia_id}",
+                    "title": doc.get("title"),
+                    "authors": authors,
+                    "source": "OpenLibrary (Archive.org)",
+                    "download_url": text_url
+                })
+        return {"results": results[:5]}
+    except Exception as e:
+        return {"error": str(e)}
+
+class FetchResultRequest(BaseModel):
+    title: str
+    download_url: str
+    source: str
+    id: str
+
+@app.post("/api/fetch_result")
+async def fetch_result(data: FetchResultRequest, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return {"error": "Not authenticated"}
+    
+    try:
+        text_res = requests.get(data.download_url)
+        if text_res.status_code != 200:
+            return {"error": "Failed to download text."}
+            
+        text_content = text_res.text
+        filename = f"{data.id}.txt"
+        filepath = os.path.join(BOOKS_DIR, filename)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(text_content)
+            
+        db_book = models.Book(title=data.title, file_path=filepath, user_id=user.id)
+        user_reloaded = db.query(models.User).filter(models.User.id == user.id).first()
+        db_book.synced_devices = user_reloaded.devices
+        db.add(db_book)
+        db.commit()
+
+        return {"message": f"Successfully fetched '{data.title}'. It will sync to your device."}
     except Exception as e:
         return {"error": str(e)}
 

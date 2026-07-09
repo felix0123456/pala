@@ -3,12 +3,15 @@
 {% block content %}
 <div class="card">
     <h2>Automated E-Book Fetcher</h2>
-    <p class="muted">Search Project Gutenberg to instantly download and convert a book for your Pala.</p>
-    <div style="display: flex; gap: 12px;">
-        <input type="text" id="book-query" placeholder="Enter book title or author (e.g. Alice in Wonderland)">
-        <button onclick="fetchBook()" style="width: auto; white-space: nowrap;">Fetch & Convert</button>
+    <p class="muted">Search across multiple libraries to instantly download a book for your Pala.</p>
+    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <input type="text" id="book-title" placeholder="Title (e.g. Pride and Prejudice)" style="flex: 1;">
+        <input type="text" id="book-author" placeholder="Author (optional)" style="flex: 1;">
+        <button onclick="searchBooks()" style="width: auto; white-space: nowrap;">Search</button>
     </div>
-    <p id="status-msg" style="color: var(--primary); margin-top: 16px; font-weight: 500;"></p>
+    <p id="search-status" style="color: var(--primary); font-weight: 500; font-size: 14px; margin-bottom: 12px;"></p>
+    <div id="search-results" style="display: flex; flex-direction: column; gap: 12px;">
+    </div>
 </div>
 
 <div class="card">
@@ -52,13 +55,57 @@
 </div>
 
 <script>
-    async function fetchBook() {
-        const query = document.getElementById('book-query').value;
-        const status = document.getElementById('status-msg');
-        if(!query) return;
-        status.innerText = "Searching Project Gutenberg...";
+    async function searchBooks() {
+        const title = document.getElementById('book-title').value.trim();
+        const author = document.getElementById('book-author').value.trim();
+        if (!title && !author) return;
+
+        const query = encodeURIComponent(title + (author ? ' ' + author : ''));
+        const status = document.getElementById('search-status');
+        const resultsDiv = document.getElementById('search-results');
+        
+        status.innerText = "Searching Project Gutenberg and OpenLibrary...";
+        resultsDiv.innerHTML = "";
+
+        const renderResult = (book) => {
+            const el = document.createElement('div');
+            el.style = "background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;";
+            // Escape HTML entities to prevent breakage
+            const safeBookJSON = JSON.stringify(book).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            el.innerHTML = `
+                <div>
+                    <div style="font-weight: bold; margin-bottom: 4px;">${book.title}</div>
+                    <div style="font-size: 14px; color: var(--text-muted);">${book.authors} &mdash; <i>${book.source}</i></div>
+                </div>
+                <button onclick="fetchSelected(${safeBookJSON})" style="padding: 8px 16px; font-size: 14px; white-space: nowrap;">Fetch</button>
+            `;
+            resultsDiv.appendChild(el);
+        };
+
+        // Fetch Gutendex
+        fetch('/api/search/gutendex?q=' + query).then(res => res.json()).then(data => {
+            if (data.results && data.results.length > 0) {
+                data.results.forEach(renderResult);
+            }
+        }).catch(err => console.error("Gutendex error", err));
+
+        // Fetch OpenLibrary
+        fetch('/api/search/openlibrary?q=' + query).then(res => res.json()).then(data => {
+            if (data.results && data.results.length > 0) {
+                data.results.forEach(renderResult);
+            }
+        }).catch(err => console.error("OpenLibrary error", err));
+    }
+
+    async function fetchSelected(book) {
+        const status = document.getElementById('search-status');
+        status.innerText = `Fetching '${book.title}'...`;
         try {
-            let res = await fetch('/api/fetch?q=' + encodeURIComponent(query));
+            let res = await fetch('/api/fetch_result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(book)
+            });
             let data = await res.json();
             status.innerText = data.message || data.error;
             if(data.message) {
