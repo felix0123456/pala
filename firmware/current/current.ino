@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.4"
+#define FW_VERSION "1.11.5"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3680,8 +3680,8 @@ void drawSettings() {
   int ascent = u8g2.getFontAscent();
   int descent = u8g2.getFontDescent();
   int lineH = (ascent - descent) + LINE_GAP + 1;
-  String sub = g_deviceName + " - v" FW_VERSION;
-  int y = drawSectionHeaderWithSubline("Settings", sub, true);
+  String headerTitle = "Settings - " + g_deviceName + " v" FW_VERSION;
+  int y = drawSectionHeader(headerTitle.c_str(), true);
 
   int totalItems = SETTINGS_COUNT - 1;
   int visible = (H - y - BOT_PAD) / lineH;
