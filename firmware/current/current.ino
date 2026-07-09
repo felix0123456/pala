@@ -37,10 +37,11 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.3"
+#define FW_VERSION "1.11.4"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
+static String g_deviceName = "Pala";
 
 bool g_appTodo = true;
 bool g_appCal = true;
@@ -571,6 +572,7 @@ static void loadSettings() {
   g_appSpot = prefs.getBool("cfg_app_spot", true);
   g_appChess = prefs.getBool("cfg_app_chess", true);
   g_appPom = prefs.getBool("cfg_app_pom", true);
+  g_deviceName = prefs.getString("cfg_name", "Pala");
 
   invalidateMetrics();
 }
@@ -3449,6 +3451,11 @@ bool syncWithCloud() {
           g_timezoneOffsetHours = tzo;
           prefs.putInt("cfg_tz_offset", tzo);
        }
+       if (doc.containsKey("device_name")) {
+          String dname = doc["device_name"].as<String>();
+          g_deviceName = dname;
+          prefs.putString("cfg_name", dname);
+       }
         if (doc.containsKey("app_todo")) {
           bool val = doc["app_todo"].as<bool>();
           g_appTodo = val;
@@ -3673,7 +3680,8 @@ void drawSettings() {
   int ascent = u8g2.getFontAscent();
   int descent = u8g2.getFontDescent();
   int lineH = (ascent - descent) + LINE_GAP + 1;
-  int y = drawSectionHeader("Settings", true);
+  String sub = g_deviceName + " - v" FW_VERSION;
+  int y = drawSectionHeaderWithSubline("Settings", sub, true);
 
   int totalItems = SETTINGS_COUNT - 1;
   int visible = (H - y - BOT_PAD) / lineH;

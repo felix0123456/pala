@@ -667,6 +667,7 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
     ]
     
     resp = {
+        "device_name": device.name or "My Pala",
         "font_size": device.font_size,
         "sleep_timeout": device.sleep_timeout,
         "line_gap": device.line_gap,
