@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.5"
+#define FW_VERSION "1.11.6"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3411,6 +3411,36 @@ bool syncWithCloud() {
          int mode = doc["screensaver_mode"];
          g_screensaverMode = mode;
          prefs.putInt("cfg_scr_mode", mode);
+      }
+      if (doc.containsKey("screensaver_updated_at")) {
+         int new_ts = doc["screensaver_updated_at"];
+         int old_ts = prefs.getInt("cfg_scr_updated", 0);
+         if (new_ts > old_ts) {
+            u8g2.setCursor(MARGIN_X, 75);
+            u8g2.print("Downloading screensaver...");
+            display.update();
+
+            WiFiClientSecure dlClient;
+            dlClient.setInsecure();
+            HTTPClient httpDl;
+            httpDl.begin(dlClient, "https://pala.felixresch.com/api/device/" + mac + "/screensaver");
+            int dlCode = httpDl.GET();
+            if (dlCode == 200) {
+              if (FS.exists("/sleep.bin")) FS.remove("/sleep.bin");
+              File f = FS.open("/sleep.bin", "w");
+              if (f) {
+                httpDl.writeToStream(&f);
+                f.close();
+                prefs.putInt("cfg_scr_updated", new_ts);
+                g_screensaverMode = 1;
+                prefs.putInt("cfg_scr_mode", 1);
+              }
+            }
+            httpDl.end();
+            u8g2.setDrawColor(0);
+            u8g2.drawBox(0, 65, 250, 20);
+            u8g2.setDrawColor(1);
+         }
       }
       if (doc.containsKey("invert_display")) {
          bool inv = doc["invert_display"];

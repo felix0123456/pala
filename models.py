@@ -42,6 +42,7 @@ class Device(Base):
     chess_elo = Column(Integer, nullable=True)
     cal_url = Column(String, nullable=True)
     tz_offset = Column(Integer, default=0)
+    screensaver_updated_at = Column(Integer, default=0)
     
     app_todo = Column(Boolean, default=True)
     app_cal = Column(Boolean, default=True)

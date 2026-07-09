@@ -55,7 +55,8 @@ with engine.connect() as conn:
         "app_cal BOOLEAN DEFAULT TRUE",
         "app_spot BOOLEAN DEFAULT TRUE",
         "app_chess BOOLEAN DEFAULT TRUE",
-        "app_pom BOOLEAN DEFAULT TRUE"
+        "app_pom BOOLEAN DEFAULT TRUE",
+        "screensaver_updated_at INTEGER DEFAULT 0"
     ]
     for col in new_columns:
         try:
@@ -70,9 +71,11 @@ templates = Jinja2Templates(directory="templates")
 FIRMWARE_DIR = os.getenv("FIRMWARE_DIR", "data/firmware/build")
 GITHUB_REPO = "felix0123456/pala"
 BOOKS_DIR = os.getenv("BOOKS_DIR", "data/books")
+SCREENSAVERS_DIR = os.getenv("SCREENSAVERS_DIR", "data/screensavers")
 
 os.makedirs(FIRMWARE_DIR, exist_ok=True)
 os.makedirs(BOOKS_DIR, exist_ok=True)
+os.makedirs(SCREENSAVERS_DIR, exist_ok=True)
 
 # ----------------- WEB FRONTEND ROUTES -----------------
 
@@ -685,6 +688,7 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         "app_spot": device.app_spot,
         "app_chess": device.app_chess,
         "app_pom": device.app_pom,
+        "screensaver_updated_at": device.screensaver_updated_at,
         "books": books_data,
         "bookmarks": bookmarks_data,
         "todos": [
@@ -705,6 +709,32 @@ async def download_book(book_id: int, mac: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Book not found")
     
     return FileResponse(book.file_path, media_type="text/plain", filename=f"{book.title}.txt")
+
+@app.post("/api/device/{mac}/screensaver")
+async def upload_screensaver(mac: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    device = db.query(models.Device).filter(models.Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    file_path = os.path.join(SCREENSAVERS_DIR, f"{mac}_sleep.bin")
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+        
+    device.screensaver_updated_at = int(time.time())
+    db.commit()
+    return {"status": "ok", "message": "Screensaver updated"}
+
+@app.get("/api/device/{mac}/screensaver")
+async def download_screensaver(mac: str, db: Session = Depends(get_db)):
+    device = db.query(models.Device).filter(models.Device.mac_address == mac).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    file_path = os.path.join(SCREENSAVERS_DIR, f"{mac}_sleep.bin")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Screensaver not found")
+        
+    return FileResponse(file_path, media_type="application/octet-stream", filename="sleep.bin")
 
 # ----------------- FIRMWARE OTA -----------------
 

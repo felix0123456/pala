@@ -196,7 +196,10 @@
                 <input type="hidden" id="scr-text-y" value="61">
             </div>
 
-            <button onclick="downloadScreensaverBin()" style="margin-top: 12px; background: var(--success);">Download sleep.bin</button>
+            <div style="display: flex; gap: 12px; margin-top: 12px;">
+                <button onclick="downloadScreensaverBin()" style="background: var(--primary);">Download sleep.bin</button>
+                <button onclick="uploadScreensaverBin()" style="background: var(--success); flex-grow: 1;">Save to Device via Cloud</button>
+            </div>
         </div>
     </div>
 </div>
@@ -399,6 +402,28 @@ function downloadScreensaverBin() {
   a.href = url; a.download = 'sleep.bin';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function uploadScreensaverBin() {
+  const bytes = compileScreensaverBin();
+  if (!bytes) return;
+  const blob = new Blob([bytes], { type: 'application/octet-stream' });
+  const formData = new FormData();
+  formData.append("file", blob, "sleep.bin");
+
+  try {
+    const res = await fetch("/api/device/{{ device.mac_address }}/screensaver", {
+      method: "POST",
+      body: formData
+    });
+    if (res.ok) {
+      alert("Screensaver saved to cloud! Your device will download it on the next sync.");
+    } else {
+      alert("Failed to save screensaver.");
+    }
+  } catch (err) {
+    alert("Error saving screensaver: " + err);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", function() {
