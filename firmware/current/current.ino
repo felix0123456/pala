@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.2"
+#define FW_VERSION "1.11.3"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -187,6 +187,7 @@ enum Mode {
   MODE_BM_PREVIEW,
   MODE_SPOTIFY,
   MODE_SETTINGS,
+  MODE_APPS_SETTINGS,
   MODE_CHESS,
   MODE_TODO,
   MODE_CALENDAR,
@@ -329,20 +330,29 @@ enum SettingsEntryType {
   SET_ENTRY_TEXT_SIZE,
   SET_ENTRY_SCREENSAVER,
   SET_ENTRY_MEMORY,
-  SET_ENTRY_APP_TODO,
-  SET_ENTRY_APP_CAL,
-  SET_ENTRY_APP_SPOT,
-  SET_ENTRY_APP_CHESS,
-  SET_ENTRY_APP_POM
+  SET_ENTRY_APPS
 };
-static const int SETTINGS_COUNT = 12;
+static const int SETTINGS_COUNT = 8;
 static int selectedSettingItem = 1;
+
+enum AppSettingsEntry {
+  APP_SET_ENTRY_BACK = 0,
+  APP_SET_ENTRY_TODO,
+  APP_SET_ENTRY_CAL,
+  APP_SET_ENTRY_SPOT,
+  APP_SET_ENTRY_CHESS,
+  APP_SET_ENTRY_POM
+};
+static const int APP_SETTINGS_COUNT = 6;
+static int selectedAppSettingItem = 1;
 
 static bool g_servicesActive = false;
 void startUploadServicesOnly();
 void stopUploadServicesOnly();
 void drawSettings();
+void drawAppsSettings();
 void handleModeSettings();
+void handleModeAppsSettings();
 
 // ---- Upload mode auto-exit ----
 static uint32_t g_uploadStartMs           = 0;
@@ -3665,9 +3675,20 @@ void drawSettings() {
   int lineH = (ascent - descent) + LINE_GAP + 1;
   int y = drawSectionHeader("Settings", true);
 
-  for (int i = 1; i < SETTINGS_COUNT; i++) { // Skip Back (0)
+  int totalItems = SETTINGS_COUNT - 1;
+  int visible = (H - y - BOT_PAD) / lineH;
+  if (visible < 3) visible = 3;
+
+  int top = selectedSettingItem - (visible / 2);
+  if (top < 1) top = 1;
+  if (top > totalItems - visible + 1) top = max(1, totalItems - visible + 1);
+
+  for (int i = 0; i < visible; i++) {
+    int idx = top + i;
+    if (idx >= SETTINGS_COUNT) break;
+
     String label;
-    switch (i) {
+    switch (idx) {
       case SET_ENTRY_UPLOAD:
         label = "Upload Mode";
         break;
@@ -3697,23 +3718,56 @@ void drawSettings() {
         label = "Storage: " + String(pct) + "% (" + String(booksSize / 1024) + "K books, " + String(freeSize / 1024) + "K free)";
         break;
       }
-      case SET_ENTRY_APP_TODO:
-        label = "App Todo: " + String(g_appTodo ? "Show" : "Hide");
-        break;
-      case SET_ENTRY_APP_CAL:
-        label = "App Cal: " + String(g_appCal ? "Show" : "Hide");
-        break;
-      case SET_ENTRY_APP_SPOT:
-        label = "App Spot: " + String(g_appSpot ? "Show" : "Hide");
-        break;
-      case SET_ENTRY_APP_CHESS:
-        label = "App Chess: " + String(g_appChess ? "Show" : "Hide");
-        break;
-      case SET_ENTRY_APP_POM:
-        label = "App Pom: " + String(g_appPom ? "Show" : "Hide");
+      case SET_ENTRY_APPS:
+        label = "Apps Visibility...";
         break;
     }
-    drawMenuBulletRow(y, label, i == selectedSettingItem, i == selectedSettingItem);
+    drawMenuBulletRow(y, label, idx == selectedSettingItem, idx == selectedSettingItem);
+    y += lineH;
+  }
+  display.update();
+}
+
+void drawAppsSettings() {
+  prepareMenuFrame();
+  u8g2.setFont(MAIN_FONT);
+
+  int ascent = u8g2.getFontAscent();
+  int descent = u8g2.getFontDescent();
+  int lineH = (ascent - descent) + LINE_GAP + 1;
+  int y = drawSectionHeader("Apps Settings", true);
+
+  int totalItems = APP_SETTINGS_COUNT - 1;
+  int visible = (H - y - BOT_PAD) / lineH;
+  if (visible < 3) visible = 3;
+
+  int top = selectedAppSettingItem - (visible / 2);
+  if (top < 1) top = 1;
+  if (top > totalItems - visible + 1) top = max(1, totalItems - visible + 1);
+
+  for (int i = 0; i < visible; i++) {
+    int idx = top + i;
+    if (idx >= APP_SETTINGS_COUNT) break;
+
+    String label;
+    switch (idx) {
+      case APP_SET_ENTRY_TODO:
+        label = "Todo List: " + String(g_appTodo ? "Show" : "Hide");
+        break;
+      case APP_SET_ENTRY_CAL:
+        label = "Calendar: " + String(g_appCal ? "Show" : "Hide");
+        break;
+      case APP_SET_ENTRY_SPOT:
+        label = "Spotify: " + String(g_appSpot ? "Show" : "Hide");
+        break;
+      case APP_SET_ENTRY_CHESS:
+        label = "Chess: " + String(g_appChess ? "Show" : "Hide");
+        break;
+      case APP_SET_ENTRY_POM:
+        label = "Pomodoro: " + String(g_appPom ? "Show" : "Hide");
+        break;
+    }
+    drawMenuBulletRow(y, label, idx == selectedAppSettingItem, idx == selectedAppSettingItem);
     y += lineH;
   }
   display.update();
@@ -3776,30 +3830,63 @@ void handleModeSettings() {
         // Double clicking storage redraws to refresh details
         drawSettings();
         break;
-      case SET_ENTRY_APP_TODO:
+      case SET_ENTRY_APPS:
+        mode = MODE_APPS_SETTINGS;
+        selectedAppSettingItem = 1;
+        drawAppsSettings();
+        break;
+    }
+    return;
+  }
+}
+
+void handleModeAppsSettings() {
+  if (btns.b1.shortClick) {
+    selectedAppSettingItem++;
+    if (selectedAppSettingItem >= APP_SETTINGS_COUNT) selectedAppSettingItem = 1;
+    drawAppsSettings();
+    return;
+  }
+
+  if (btns.b2.shortClick) {
+    selectedAppSettingItem--;
+    if (selectedAppSettingItem < 1) selectedAppSettingItem = APP_SETTINGS_COUNT - 1;
+    drawAppsSettings();
+    return;
+  }
+
+  if (btns.b2.doubleClick) {
+    mode = MODE_SETTINGS;
+    drawSettings();
+    return;
+  }
+
+  if (btns.b1.doubleClick) {
+    switch (selectedAppSettingItem) {
+      case APP_SET_ENTRY_TODO:
         g_appTodo = !g_appTodo;
         prefs.putBool("cfg_app_todo", g_appTodo);
-        drawSettings();
+        drawAppsSettings();
         break;
-      case SET_ENTRY_APP_CAL:
+      case APP_SET_ENTRY_CAL:
         g_appCal = !g_appCal;
         prefs.putBool("cfg_app_cal", g_appCal);
-        drawSettings();
+        drawAppsSettings();
         break;
-      case SET_ENTRY_APP_SPOT:
+      case APP_SET_ENTRY_SPOT:
         g_appSpot = !g_appSpot;
         prefs.putBool("cfg_app_spot", g_appSpot);
-        drawSettings();
+        drawAppsSettings();
         break;
-      case SET_ENTRY_APP_CHESS:
+      case APP_SET_ENTRY_CHESS:
         g_appChess = !g_appChess;
         prefs.putBool("cfg_app_chess", g_appChess);
-        drawSettings();
+        drawAppsSettings();
         break;
-      case SET_ENTRY_APP_POM:
+      case APP_SET_ENTRY_POM:
         g_appPom = !g_appPom;
         prefs.putBool("cfg_app_pom", g_appPom);
-        drawSettings();
+        drawAppsSettings();
         break;
     }
     return;
@@ -6479,6 +6566,9 @@ void loop() {
 
     case MODE_SETTINGS:
       handleModeSettings();
+      break;
+    case MODE_APPS_SETTINGS:
+      handleModeAppsSettings();
       break;
 
     case MODE_CHESS:
