@@ -692,6 +692,7 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
             for t in device.owner.todos
         ]
     }
+    return resp
 
 @app.get("/api/book/{book_id}")
 async def download_book(book_id: int, mac: str, db: Session = Depends(get_db)):
