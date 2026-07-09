@@ -3254,7 +3254,7 @@ void stopUploadServicesOnly() {
   g_sleepUploadTmpPath = "";
 }
 
-bool syncWithCloud(bool silent = false) {
+bool syncWithCloud(bool silent = false, bool background = false) {
   if (g_wifiCount == 0) return false;
 
   if (!silent) {
@@ -3302,6 +3302,7 @@ bool syncWithCloud(bool silent = false) {
       DeserializationError err = deserializeJson(regDoc, payload);
       if (!err && regDoc["status"] == "pairing") {
         if (!gotCode) {
+          if (background) { http.end(); WiFi.disconnect(true, true); return false; }
           silent = false;
           gotCode = true;
           pairingCode = regDoc["code"].as<String>();
@@ -3351,6 +3352,7 @@ bool syncWithCloud(bool silent = false) {
 
   if (!alreadyRegistered) {
     if (!gotCode) {
+      if (background) { WiFi.disconnect(true, true); return false; }
       silent = false;
       prepareMenuFrame();
       u8g2.setFont(BOLD_FONT);
@@ -5010,6 +5012,18 @@ void handleModeChess() {
   }
 }
 
+volatile bool g_isSyncing = false;
+volatile bool g_needsLibraryRefresh = false;
+
+void backgroundSyncTask(void *pvParameters) {
+  g_isSyncing = true;
+  if (syncWithCloud(true, true)) {
+    g_needsLibraryRefresh = true;
+  }
+  g_isSyncing = false;
+  vTaskDelete(NULL);
+}
+
 // ============================================================================
 //  Setup / Mode handlers / Loop
 // ============================================================================
@@ -5137,7 +5151,7 @@ void setup() {
   }
 
   if (!restored) {
-    syncWithCloud(true);
+    xTaskCreate(backgroundSyncTask, "bgSync", 10240, NULL, 1, NULL);
     loadBooks();
     drawLibrary();
     resetInputFrontend();
@@ -6486,6 +6500,12 @@ void handleModePomodoro() {
 
 void loop() {
   btns.poll();
+
+  if (g_needsLibraryRefresh && !g_isSyncing && mode == MODE_LIBRARY) {
+    g_needsLibraryRefresh = false;
+    loadBooks();
+    drawLibrary();
+  }
 
   if (g_isrDropCount > BTN_QUEUE_RECOVER_THRESHOLD) {
     noInterrupts();
