@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.8"
+#define FW_VERSION "1.11.9"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -561,9 +561,6 @@ static void loadSettings() {
   g_chessElo = prefs.getInt("cfg_chess_elo", 1500);
 
   g_screensaverMode = prefs.getInt("cfg_scr_mode", 0);
-  if (g_spotifyScreensaver && g_screensaverMode == 0) {
-    g_screensaverMode = 1;
-  }
   g_calUrl = prefs.getString("cfg_cal_url", "");
   g_timezoneOffsetHours = prefs.getInt("cfg_tz_offset", 2);
 
@@ -5516,6 +5513,17 @@ static void handleModeReader() {
 }
 
 void handleModeSpotify() {
+  if (g_spotifyClientId.length() == 0 || g_spotifyRefreshToken.length() == 0) {
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(10, 20, "Spotify not configured.");
+    display.drawString(10, 35, "Set API keys in Web UI.");
+    display.display();
+    delay(3000);
+    exitSpotifyMode();
+    return;
+  }
+
   if (!ensureSpotifyWiFi()) {
     exitSpotifyMode();
     return;
