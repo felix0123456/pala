@@ -28,7 +28,7 @@
 <div class="card">
     <div class="flex-between" style="margin-bottom: 16px;">
         <h2 style="margin: 0;">Your Devices</h2>
-        <a href="/devices" style="font-weight: 500;">Manage &rarr;</a>
+        <a href="/user" style="font-weight: 500;">Manage &rarr;</a>
     </div>
     {% if devices %}
         <ul class="list-group">
@@ -47,6 +47,11 @@
             </li>
         {% endfor %}
         </ul>
+    {% else %}
+        <div style="background: rgba(255,255,255,0.05); border: 1px dashed var(--border); border-radius: 8px; padding: 24px; text-align: center;">
+            <p class="muted">You haven't paired a Pala device yet.</p>
+            <a href="/user" style="display: inline-block; background: var(--primary); color: var(--text); padding: 8px 16px; border-radius: 8px; margin-top: 8px; font-weight: 500;">Pair Device</a>
+        </div>
     {% endif %}
 </div>
 

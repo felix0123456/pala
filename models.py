@@ -61,6 +61,7 @@ class Book(Base):
     title = Column(String, index=True)
     file_path = Column(String)
     user_id = Column(Integer, ForeignKey("users.id"))
+    folder = Column(String, default="Root")
 
     owner = relationship("User", back_populates="books")
     bookmarks = relationship("Bookmark", back_populates="book")

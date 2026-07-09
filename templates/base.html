@@ -117,30 +117,25 @@
         </div>
         <div class='nav-menu'>
             {% if user %}
-                <a href='/user' class='nav-btn'>
-                    <div style="display:flex; gap:8px;"><span>&#128100;</span> User</div>
-                </a>
-                <a href='/devices' class='nav-btn'>
-                    <div style="display:flex; gap:8px;"><span>&#128241;</span> Device</div>
-                    {% if device %}
-                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: {{ device.name }}</div>
-                    {% elif user.devices and user.devices|length > 0 %}
-                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: {{ user.devices[0].name }}</div>
-                    {% else %}
-                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">Current: None</div>
-                    {% endif %}
-                </a>
                 <a href='/' class='nav-btn'>
-                    <div style="display:flex; gap:8px;"><span>&#128214;</span> Home</div>
-                </a>
-                <a href='/library' class='nav-btn'>
-                    <div style="display:flex; gap:8px;"><span>&#128218;</span> Library & Uploader</div>
+                    <div style="display:flex; gap:8px;"><span>&#128214;</span> Dashboard</div>
                 </a>
                 {% if device or (user.devices and user.devices|length > 0) %}
-                <a href='/device/{{ device.mac_address if device else user.devices[0].mac_address }}/apps' class='nav-btn'>
-                    <div style="display:flex; gap:8px;"><span>&#128241;</span> Apps</div>
+                <a href='/device/{{ device.mac_address if device else user.devices[0].mac_address }}' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128241;</span> My Pala</div>
+                    {% if device %}
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">{{ device.name }}</div>
+                    {% elif user.devices and user.devices|length > 0 %}
+                        <div style="font-size: 12px; color: var(--text-muted); margin-left: 24px;">{{ user.devices[0].name }}</div>
+                    {% endif %}
                 </a>
                 {% endif %}
+                <a href='/library' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128218;</span> Library</div>
+                </a>
+                <a href='/user' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#128100;</span> User & Devices</div>
+                </a>
                 {% if user.is_admin %}
                 <a href='/admin' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#9881;</span> Admin Dashboard</div>
@@ -154,6 +149,10 @@
                     <div style="display:flex; gap:8px;"><span>&#9997;</span> Register</div>
                 </a>
             {% endif %}
+        </div>
+        <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+            <a href="/impressum" style="color: var(--text-muted); font-size: 12px; text-decoration: none;">Impressum</a>
+            <a href="/privacy" style="color: var(--text-muted); font-size: 12px; text-decoration: none;">Privacy Policy</a>
         </div>
     </div>
     <div class='main-content'>

@@ -68,6 +68,12 @@ with engine.connect() as conn:
         except Exception:
             pass
 
+    try:
+        conn.execute(text("ALTER TABLE books ADD COLUMN folder VARCHAR DEFAULT 'Root'"))
+        conn.commit()
+    except Exception:
+        pass
+
 app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
 
@@ -90,12 +96,7 @@ async def index(request: Request, db: Session = Depends(get_db)):
     
     user = db.query(models.User).filter(models.User.id == user.id).first()
     devices = user.devices
-    if len(devices) == 0:
-        return RedirectResponse(url="/devices", status_code=status.HTTP_302_FOUND)
-    elif len(devices) == 1:
-        return RedirectResponse(url=f"/device/{devices[0].mac_address}", status_code=status.HTTP_302_FOUND)
-    else:
-        return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": devices, "books": user.books})
+    return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": devices, "books": user.books})
 
 @app.get("/library", response_class=HTMLResponse)
 async def library_view(request: Request, db: Session = Depends(get_db)):
@@ -105,13 +106,7 @@ async def library_view(request: Request, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user.id).first()
     return templates.TemplateResponse(request=request, name="library.html", context={"user": user, "books": user.books, "devices": user.devices})
 
-@app.get("/devices", response_class=HTMLResponse)
-async def devices_view(request: Request, db: Session = Depends(get_db)):
-    user = auth.get_current_user(request, db)
-    if not user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    user = db.query(models.User).filter(models.User.id == user.id).first()
-    return templates.TemplateResponse(request=request, name="devices.html", context={"user": user, "devices": user.devices})
+
 
 @app.get("/user", response_class=HTMLResponse)
 async def user_view(request: Request, db: Session = Depends(get_db)):
@@ -119,7 +114,7 @@ async def user_view(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     user = db.query(models.User).filter(models.User.id == user.id).first()
-    return templates.TemplateResponse(request=request, name="user.html", context={"user": user})
+    return templates.TemplateResponse(request=request, name="user.html", context={"user": user, "devices": user.devices})
 
 
 @app.get("/todos", response_class=HTMLResponse)
@@ -128,6 +123,16 @@ async def todos_page(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse(request=request, name="todos.html", context={"user": user, "todos": user.todos})
+
+@app.get("/impressum", response_class=HTMLResponse)
+async def impressum_page(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    return templates.TemplateResponse(request=request, name="impressum.html", context={"user": user})
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    return templates.TemplateResponse(request=request, name="privacy.html", context={"user": user})
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_get(request: Request):
@@ -192,7 +197,7 @@ async def pair_device(request: Request, code: str = Form(...), db: Session = Dep
     device.user_id = user.id
     device.pairing_code = None
     db.commit()
-    return RedirectResponse(url="/devices", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/user", status_code=status.HTTP_302_FOUND)
 
 @app.get("/device/{mac_address}", response_class=HTMLResponse)
 async def device_view(request: Request, mac_address: str, db: Session = Depends(get_db)):
@@ -712,8 +717,8 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
     if not device or not device.user_id:
         raise HTTPException(status_code=401, detail="Device not registered")
     
-    # Return settings and explicitly synced books
-    books_data = [{"id": b.id, "title": b.title} for b in device.synced_books]
+    # Return settings and all user books (since we sync the whole library now)
+    books_data = [{"id": b.id, "title": b.title} for b in device.owner.books]
     bookmarks_data = [
         {"book_id": bm.book_id, "title": bm.book.title, "page_index": bm.page_index} 
         for bm in device.bookmarks if bm.book
@@ -759,6 +764,36 @@ async def download_book(book_id: int, mac: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Book not found")
     
     return FileResponse(book.file_path, media_type="text/plain", filename=f"{book.title}.txt")
+
+@app.put("/api/book/{book_id}/move")
+async def move_book(book_id: int, request: Request, folder: str = Form(...), db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    book = db.query(models.Book).filter(models.Book.id == book_id, models.Book.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    book.folder = folder
+    db.commit()
+    return {"status": "ok"}
+
+@app.delete("/api/book/{book_id}")
+async def delete_book(book_id: int, request: Request, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    book = db.query(models.Book).filter(models.Book.id == book_id, models.Book.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if os.path.exists(book.file_path):
+        try:
+            os.remove(book.file_path)
+        except:
+            pass
+    db.query(models.Bookmark).filter(models.Bookmark.book_id == book_id).delete()
+    db.delete(book)
+    db.commit()
+    return {"status": "ok"}
 
 @app.post("/api/device/{mac}/screensaver")
 async def upload_screensaver(mac: str, file: UploadFile = File(...), db: Session = Depends(get_db)):

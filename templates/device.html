@@ -1,10 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="flex-between">
+<div class="flex-between" style="margin-bottom: 24px;">
     <div style="display: flex; align-items: center; gap: 16px;">
-        <a href="/devices" class="nav-btn" style="padding: 8px 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">&larr; Back</a>
-        <h2 style="margin: 0; font-size: 24px;">{{ device.name }} <span style="font-size: 14px; color: var(--text-muted); font-weight: 400;">({{ device.mac_address }})</span></h2>
+        <a href="/" class="nav-btn" style="padding: 8px 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">&larr; Back</a>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <h2 style="margin: 0; font-size: 24px;">{{ device.name }} <span style="font-size: 14px; color: var(--text-muted); font-weight: 400;">({{ device.mac_address }})</span></h2>
+            <button onclick="document.getElementById('rename-modal').style.display='flex'" style="padding: 4px 8px; font-size: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-muted);">Edit</button>
+        </div>
+    </div>
+    <a href="/device/{{ device.mac_address }}/apps" class="nav-btn" style="background: var(--primary); color: var(--text); padding: 8px 16px;">Manage Apps &rarr;</a>
+</div>
+
+<!-- Rename Modal -->
+<div id="rename-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 50; align-items: center; justify-content: center;">
+    <div class="card stack" style="width: 100%; max-width: 400px;">
+        <h2>Rename Device</h2>
+        <form action="/device/{{ device.mac_address }}/rename" method="POST" class="stack">
+            <input type="text" name="name" value="{{ device.name }}" required>
+            <div style="display: flex; gap: 12px; margin-top: 12px;">
+                <button type="button" class="secondary" onclick="document.getElementById('rename-modal').style.display='none'" style="flex: 1;">Cancel</button>
+                <button type="submit" style="flex: 1;">Save</button>
+            </div>
+        </form>
     </div>
 </div>
 
