@@ -170,31 +170,11 @@
 
             <hr style="border: 0; border-top: 1px solid var(--border); margin: 8px 0;">
 
-            <div class="stack" style="gap: 6px;">
-                <label style="font-size: 13px; color: var(--text-muted);">Overlay Text</label>
-                <input type="text" id="scr-text-input" placeholder="Type here..." oninput="drawScreensaverPreview()">
+            <div id="scr-text-elements-container" class="stack" style="gap: 12px;">
+                <!-- Dynamically populated text elements -->
             </div>
-
-            <div class="grid-2">
-                <div class="stack" style="gap: 6px;">
-                    <label style="font-size: 13px; color: var(--text-muted);">Text Size (<span id="scr-text-size-val">16</span>px)</label>
-                    <input type="range" id="scr-text-size" min="8" max="72" value="16" oninput="updateScrTextSize(this.value)" style="width: 100%;">
-                </div>
-                <div class="stack" style="gap: 6px;">
-                    <label style="font-size: 13px; color: var(--text-muted);">Font Family</label>
-                    <select id="scr-text-font" onchange="updateScrTextFont(this.value)">
-                        <option value="sans-serif">Sans-Serif</option>
-                        <option value="serif">Serif</option>
-                        <option value="monospace">Monospace</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="stack" style="gap: 6px; display: none;">
-                <!-- Hidden inputs to track text position for drag tool -->
-                <input type="hidden" id="scr-text-x" value="125">
-                <input type="hidden" id="scr-text-y" value="61">
-            </div>
+            
+            <button type="button" onclick="addScrTextElement()" style="margin-top: 4px; padding: 8px; background: rgba(255,255,255,0.05); border: 1px dashed var(--border); color: var(--text); border-radius: 6px; cursor: pointer;">+ Add Text Element</button>
 
             <div style="display: flex; gap: 12px; margin-top: 12px;">
                 <button onclick="downloadScreensaverBin()" style="background: var(--primary);">Download sleep.bin</button>
@@ -210,11 +190,11 @@ let scrImage = null;
 let scrScale = 1.0;
 let scrImgX = 0;
 let scrImgY = 0;
-let scrTextX = 125;
-let scrTextY = 61;
-let scrTextSize = 16;
+let scrTexts = [
+  { text: "", x: 125, y: 61, size: 16, font: "sans-serif" }
+];
+let scrActiveTextIndex = 0;
 let scrTextColor = "black";
-let scrTextFont = "sans-serif";
 let scrIsDragging = false;
 let scrDragStartX = 0;
 let scrDragStartY = 0;
@@ -256,6 +236,21 @@ function initScreensaverDesigner() {
     const x = Math.round(((e.clientX - rect.left) / rect.width) * 250);
     const y = Math.round(((e.clientY - rect.top) / rect.height) * 122);
     scrIsDragging = true; scrDragStartX = x; scrDragStartY = y; e.preventDefault();
+    
+    const dragMode = document.getElementById('scr-drag-mode').value;
+    if (dragMode === 'text') {
+        let minDist = Infinity;
+        let closestIdx = 0;
+        for (let i = 0; i < scrTexts.length; i++) {
+            let dx = scrTexts[i].x - x;
+            let dy = scrTexts[i].y - y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < minDist) { minDist = dist; closestIdx = i; }
+        }
+        if (scrTexts.length > 0) {
+            scrActiveTextIndex = closestIdx;
+        }
+    }
   });
   window.addEventListener('mousemove', (e) => {
     if (!scrIsDragging) return;
@@ -265,11 +260,16 @@ function initScreensaverDesigner() {
     const dx = x - scrDragStartX; const dy = y - scrDragStartY;
     scrDragStartX = x; scrDragStartY = y;
     const dragMode = document.getElementById('scr-drag-mode').value;
-    if (dragMode === 'text') {
-      scrTextX += dx; scrTextY += dy;
-      document.getElementById('scr-text-x').value = scrTextX;
-      document.getElementById('scr-text-y').value = scrTextY;
-    } else {
+    if (dragMode === 'text' && scrTexts.length > 0) {
+      if (scrActiveTextIndex >= 0 && scrActiveTextIndex < scrTexts.length) {
+          scrTexts[scrActiveTextIndex].x += dx; 
+          scrTexts[scrActiveTextIndex].y += dy;
+          const xInput = document.getElementById(`scr-text-x-${scrActiveTextIndex}`);
+          const yInput = document.getElementById(`scr-text-y-${scrActiveTextIndex}`);
+          if (xInput) xInput.value = scrTexts[scrActiveTextIndex].x;
+          if (yInput) yInput.value = scrTexts[scrActiveTextIndex].y;
+      }
+    } else if (dragMode === 'image') {
       scrImgX += dx; scrImgY += dy;
       document.getElementById('scr-image-x').value = scrImgX;
       document.getElementById('scr-image-y').value = scrImgY;
@@ -277,14 +277,83 @@ function initScreensaverDesigner() {
     drawScreensaverPreview();
   });
   window.addEventListener('mouseup', () => scrIsDragging = false);
+  renderScrTextControls();
   drawScreensaverPreview();
 }
 
 function updateScrScale(val) { scrScale = parseFloat(val); document.getElementById('scr-scale-val').innerText = scrScale.toFixed(2); drawScreensaverPreview(); }
 function updateScrThreshold(val) { document.getElementById('scr-threshold-val').innerText = val; drawScreensaverPreview(); }
 function updateScrImagePosInputs() { scrImgX = parseInt(document.getElementById('scr-image-x').value) || 0; scrImgY = parseInt(document.getElementById('scr-image-y').value) || 0; drawScreensaverPreview(); }
-function updateScrTextSize(val) { scrTextSize = parseInt(val); document.getElementById('scr-text-size-val').innerText = val; drawScreensaverPreview(); }
-function updateScrTextFont(val) { scrTextFont = val; drawScreensaverPreview(); }
+
+function addScrTextElement() {
+  scrTexts.push({ text: "", x: 125, y: 61, size: 16, font: "sans-serif" });
+  renderScrTextControls();
+  drawScreensaverPreview();
+}
+
+function removeScrTextElement(idx) {
+  scrTexts.splice(idx, 1);
+  renderScrTextControls();
+  drawScreensaverPreview();
+}
+
+function updateScrText(idx, field, val) {
+  scrTexts[idx][field] = val;
+  if (field === 'size') {
+    const sizeLabel = document.getElementById(`scr-text-size-val-${idx}`);
+    if (sizeLabel) sizeLabel.innerText = val;
+  }
+  drawScreensaverPreview();
+}
+
+function renderScrTextControls() {
+  const container = document.getElementById('scr-text-elements-container');
+  if (!container) return;
+  container.innerHTML = '';
+  scrTexts.forEach((t, idx) => {
+    const div = document.createElement('div');
+    div.style = "background: rgba(0,0,0,0.1); padding: 12px; border-radius: 8px; border: 1px solid var(--border);";
+    div.className = "stack";
+    
+    // Safely escape text for the input value
+    const escapedText = t.text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    
+    div.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="font-size: 13px;">Text Element ${idx + 1}</strong>
+            ${scrTexts.length > 1 ? `<button type="button" onclick="removeScrTextElement(${idx})" style="background: transparent; border: none; color: #ff4444; cursor: pointer; padding: 4px; font-size: 12px;">&times; Remove</button>` : ''}
+        </div>
+        <div class="grid-2">
+            <div class="stack" style="gap: 6px;">
+                <label style="font-size: 13px; color: var(--text-muted);">Text</label>
+                <input type="text" value="${escapedText}" oninput="updateScrText(${idx}, 'text', this.value)" placeholder="Type here...">
+            </div>
+            <div class="stack" style="gap: 6px;">
+                <label style="font-size: 13px; color: var(--text-muted);">Position (X/Y)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="number" id="scr-text-x-${idx}" value="${t.x}" oninput="updateScrText(${idx}, 'x', parseInt(this.value)||0)" style="padding: 6px; border-radius: 6px;">
+                    <input type="number" id="scr-text-y-${idx}" value="${t.y}" oninput="updateScrText(${idx}, 'y', parseInt(this.value)||0)" style="padding: 6px; border-radius: 6px;">
+                </div>
+            </div>
+        </div>
+        <div class="grid-2">
+            <div class="stack" style="gap: 6px;">
+                <label style="font-size: 13px; color: var(--text-muted);">Size (<span id="scr-text-size-val-${idx}">${t.size}</span>px)</label>
+                <input type="range" min="8" max="72" value="${t.size}" oninput="updateScrText(${idx}, 'size', parseInt(this.value))" style="width: 100%;">
+            </div>
+            <div class="stack" style="gap: 6px;">
+                <label style="font-size: 13px; color: var(--text-muted);">Font</label>
+                <select onchange="updateScrText(${idx}, 'font', this.value)">
+                    <option value="sans-serif" ${t.font==='sans-serif'?'selected':''}>Sans-Serif</option>
+                    <option value="serif" ${t.font==='serif'?'selected':''}>Serif</option>
+                    <option value="monospace" ${t.font==='monospace'?'selected':''}>Monospace</option>
+                </select>
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+  });
+}
 
 function thresholdConvert(imgData, threshold) {
   const d = imgData.data; const out = new Uint8ClampedArray(250 * 122);
@@ -353,16 +422,17 @@ function drawScreensaverPreview() {
     ctx.putImageData(targetData, 0, 0);
   }
   
-  const text = document.getElementById('scr-text-input').value;
-  if (text) {
-    ctx.font = `${scrTextSize}px ${scrTextFont}`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = scrTextColor === 'white' ? '#ffffff' : '#000000';
-    ctx.strokeStyle = scrTextColor === 'white' ? '#000000' : '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.strokeText(text, scrTextX, scrTextY);
-    ctx.fillText(text, scrTextX, scrTextY);
-  }
+  scrTexts.forEach(t => {
+    if (t.text) {
+      ctx.font = `${t.size}px ${t.font}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = scrTextColor === 'white' ? '#ffffff' : '#000000';
+      ctx.strokeStyle = scrTextColor === 'white' ? '#000000' : '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.strokeText(t.text, t.x, t.y);
+      ctx.fillText(t.text, t.x, t.y);
+    }
+  });
 }
 
 function compileScreensaverBin() {
