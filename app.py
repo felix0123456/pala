@@ -95,8 +95,9 @@ async def index(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
     user = db.query(models.User).filter(models.User.id == user.id).first()
-    devices = user.devices
-    return templates.TemplateResponse(request=request, name="index.html", context={"user": user, "devices": devices, "books": user.books})
+    if user.devices and len(user.devices) > 0:
+        return RedirectResponse(url=f"/device/{user.devices[0].mac_address}", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(url="/user", status_code=status.HTTP_302_FOUND)
 
 @app.get("/library", response_class=HTMLResponse)
 async def library_view(request: Request, db: Session = Depends(get_db)):

@@ -134,6 +134,31 @@
     </div>
 </div>
 
+<!-- Todo List -->
+<div class="card stack" style="margin-top: 24px;">
+    <div class="flex-between" style="margin-bottom: 0px;">
+        <h2 style="margin: 0;">Your Todo List</h2>
+        <a href="/todos" style="font-weight: 500;">Manage &rarr;</a>
+    </div>
+    
+    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <input type="text" id="new-todo" placeholder="What needs to be done?" onkeypress="if(event.key === 'Enter') addTodo()">
+        <button onclick="addTodo()">Add Task</button>
+    </div>
+
+    <ul class="list-group" id="todo-list">
+        {% for todo in user.todos %}
+        <li class="flex-between" id="todo-{{ todo.id }}">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="checkbox" {% if todo.checked %}checked{% endif %} onchange="toggleTodo({{ todo.id }}, this.checked, '{{ todo.text|escape }}')">
+                <span id="text-{{ todo.id }}" style="{% if todo.checked %}text-decoration: line-through; color: var(--text-muted);{% endif %}">{{ todo.text }}</span>
+            </div>
+            <button class="danger" style="padding: 6px 12px; font-size: 12px;" onclick="deleteTodo({{ todo.id }})">Delete</button>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
 <!-- Interactive Screensaver Creator -->
 <div class="card stack" style="margin-top: 24px;">
     <h2>Interactive Screensaver Creator</h2>
@@ -518,5 +543,75 @@ async function uploadScreensaverBin() {
 document.addEventListener("DOMContentLoaded", function() {
     initScreensaverDesigner();
 });
+
+async function addTodo() {
+    const input = document.getElementById('new-todo');
+    const text = input.value.trim();
+    if (!text) return;
+    
+    try {
+        const res = await fetch('/api/todos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        });
+        if (res.ok) {
+            const todo = await res.json();
+            input.value = '';
+            
+            const ul = document.getElementById('todo-list');
+            const li = document.createElement('li');
+            li.className = 'flex-between';
+            li.id = 'todo-' + todo.id;
+            
+            const safeText = todo.text.replace(/'/g, "\\'");
+            
+            li.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <input type="checkbox" onchange="toggleTodo(${todo.id}, this.checked, '${safeText}')">
+                    <span id="text-${todo.id}">${todo.text}</span>
+                </div>
+                <button class="danger" style="padding: 6px 12px; font-size: 12px;" onclick="deleteTodo(${todo.id})">Delete</button>
+            `;
+            ul.appendChild(li);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function toggleTodo(id, checked, text) {
+    try {
+        const span = document.getElementById('text-' + id);
+        if (checked) {
+            span.style.textDecoration = 'line-through';
+            span.style.color = 'var(--text-muted)';
+        } else {
+            span.style.textDecoration = 'none';
+            span.style.color = 'inherit';
+        }
+        
+        await fetch('/api/todos/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text, checked: checked })
+        });
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function deleteTodo(id) {
+    try {
+        const res = await fetch('/api/todos/' + id, {
+            method: 'DELETE'
+        });
+        if (res.ok) {
+            document.getElementById('todo-' + id).remove();
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
 </script>
 {% endblock %}

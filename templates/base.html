@@ -121,9 +121,6 @@
         </div>
         <div class='nav-menu'>
             {% if user %}
-                <a href='/' class='nav-btn'>
-                    <div style="display:flex; gap:8px;"><span>&#128214;</span> Dashboard</div>
-                </a>
                 {% if device or (user.devices and user.devices|length > 0) %}
                 <a href='/device/{{ device.mac_address if device else user.devices[0].mac_address }}' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#128241;</span> My Pala</div>
