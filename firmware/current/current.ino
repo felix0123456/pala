@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.6"
+#define FW_VERSION "1.11.7"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3437,9 +3437,7 @@ bool syncWithCloud() {
               }
             }
             httpDl.end();
-            u8g2.setDrawColor(0);
-            u8g2.drawBox(0, 65, 250, 20);
-            u8g2.setDrawColor(1);
+            gfx.fillRect(0, 65, 250, 20, 0);
          }
       }
       if (doc.containsKey("invert_display")) {
