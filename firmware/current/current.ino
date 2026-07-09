@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.7"
+#define FW_VERSION "1.11.8"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3257,28 +3257,32 @@ void stopUploadServicesOnly() {
   g_sleepUploadTmpPath = "";
 }
 
-bool syncWithCloud() {
+bool syncWithCloud(bool silent = false) {
   if (g_wifiCount == 0) return false;
 
-  prepareMenuFrame();
+  if (!silent) {
+    prepareMenuFrame();
 
-  u8g2.setFont(BOLD_FONT);
-  u8g2.setCursor(MARGIN_X, 11);
-  u8g2.print("Cloud Sync");
-  gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
-  u8g2.setFont(MAIN_FONT);
-  u8g2.setCursor(MARGIN_X, 33);
-  u8g2.print("Connecting to WiFi...");
-  display.update();
+    u8g2.setFont(BOLD_FONT);
+    u8g2.setCursor(MARGIN_X, 11);
+    u8g2.print("Cloud Sync");
+    gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
+    u8g2.setFont(MAIN_FONT);
+    u8g2.setCursor(MARGIN_X, 33);
+    u8g2.print("Connecting to WiFi...");
+    display.update();
+  }
 
   if (!connectSTAWithMulti()) {
     WiFi.disconnect(true, true);
     return false;
   }
 
-  u8g2.setCursor(MARGIN_X, 48);
-  u8g2.print("Syncing with server...");
-  display.update();
+  if (!silent) {
+    u8g2.setCursor(MARGIN_X, 48);
+    u8g2.print("Syncing with server...");
+    display.update();
+  }
 
   WiFiClientSecure client;
   client.setInsecure();
@@ -3301,6 +3305,7 @@ bool syncWithCloud() {
       DeserializationError err = deserializeJson(regDoc, payload);
       if (!err && regDoc["status"] == "pairing") {
         if (!gotCode) {
+          silent = false;
           gotCode = true;
           pairingCode = regDoc["code"].as<String>();
           prepareMenuFrame();
@@ -3349,6 +3354,7 @@ bool syncWithCloud() {
 
   if (!alreadyRegistered) {
     if (!gotCode) {
+      silent = false;
       prepareMenuFrame();
       u8g2.setFont(BOLD_FONT);
       u8g2.setCursor(MARGIN_X, 20);
@@ -3372,15 +3378,17 @@ bool syncWithCloud() {
     return false;
   }
 
-  prepareMenuFrame();
-  u8g2.setFont(BOLD_FONT);
-  u8g2.setCursor(MARGIN_X, 11);
-  u8g2.print("Cloud Sync");
-  gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
-  u8g2.setFont(MAIN_FONT);
-  u8g2.setCursor(MARGIN_X, 33);
-  u8g2.print("Syncing with server...");
-  display.update();
+  if (!silent) {
+    prepareMenuFrame();
+    u8g2.setFont(BOLD_FONT);
+    u8g2.setCursor(MARGIN_X, 11);
+    u8g2.print("Cloud Sync");
+    gfx.drawFastHLine(MARGIN_X, 16, W - (MARGIN_X * 2), 1);
+    u8g2.setFont(MAIN_FONT);
+    u8g2.setCursor(MARGIN_X, 33);
+    u8g2.print("Syncing with server...");
+    display.update();
+  }
   
   // Pull
   http.begin(client, "https://pala.felixresch.com/api/sync/pull?mac=" + mac);
@@ -3416,9 +3424,11 @@ bool syncWithCloud() {
          int new_ts = doc["screensaver_updated_at"];
          int old_ts = prefs.getInt("cfg_scr_updated", 0);
          if (new_ts > old_ts) {
-            u8g2.setCursor(MARGIN_X, 75);
-            u8g2.print("Downloading screensaver...");
-            display.update();
+            if (!silent) {
+              u8g2.setCursor(MARGIN_X, 75);
+              u8g2.print("Downloading screensaver...");
+              display.update();
+            }
 
             WiFiClientSecure dlClient;
             dlClient.setInsecure();
@@ -3547,9 +3557,11 @@ bool syncWithCloud() {
           if (!safeTitle.endsWith(".txt")) safeTitle += ".txt";
           String fpath = "/reading/" + safeTitle;
           if (!FS.exists(fpath)) {
-             u8g2.setCursor(MARGIN_X, 60);
-             u8g2.print("Downloading book...");
-             display.update();
+             if (!silent) {
+               u8g2.setCursor(MARGIN_X, 60);
+               u8g2.print("Downloading book...");
+               display.update();
+             }
 
              WiFiClientSecure dlClient;
              dlClient.setInsecure();
@@ -5128,7 +5140,7 @@ void setup() {
   }
 
   if (!restored) {
-    syncWithCloud();
+    syncWithCloud(true);
     loadBooks();
     drawLibrary();
     resetInputFrontend();
