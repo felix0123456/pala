@@ -770,7 +770,7 @@ bool fetchChessPuzzle();
 
 void initPomodoro();
 void handleModePomodoro();
-void drawPomodoroScreen();
+void drawPomodoroScreen(bool partial = false);
 
 static void safeCloseBook();
 static void enterLibraryRoot(bool redraw);
@@ -6271,8 +6271,12 @@ void initPomodoro() {
   drawPomodoroScreen();
 }
 
-void drawPomodoroScreen() {
-  display.fastmodeOff();
+void drawPomodoroScreen(bool partial = false) {
+  if (partial) {
+    display.fastmodeOn();
+  } else {
+    display.fastmodeOff();
+  }
   display.clear();
   gfx.disableInversion = true;
   
@@ -6330,6 +6334,9 @@ void drawPomodoroScreen() {
   }
   
   display.update();
+  if (partial) {
+    display.fastmodeOff();
+  }
   gfx.disableInversion = false;
 }
 
@@ -6363,7 +6370,7 @@ void handleModePomodoro() {
           } else {
               g_pomStudyDuration = 5;
           }
-          drawPomodoroScreen();
+          drawPomodoroScreen(true);
       }
       if (btn2Clicked) {
           if (g_pomStudyDuration > 60) {
@@ -6373,7 +6380,7 @@ void handleModePomodoro() {
           } else {
               g_pomStudyDuration = 120;
           }
-          drawPomodoroScreen();
+          drawPomodoroScreen(true);
       }
       if (btns.b1.doubleClick || btns.b2.doubleClick) {
           g_pomRemainingMin = g_pomStudyDuration;
@@ -6422,7 +6429,7 @@ void handleModePomodoro() {
                   g_pomSkipBreak = true;
               }
           }
-          drawPomodoroScreen();
+          drawPomodoroScreen(true);
       }
       if (btn2Clicked) {
           if (g_pomSkipBreak) {
@@ -6437,7 +6444,7 @@ void handleModePomodoro() {
                   g_pomSkipBreak = true;
               }
           }
-          drawPomodoroScreen();
+          drawPomodoroScreen(true);
       }
       if (btns.b1.doubleClick || btns.b2.doubleClick) {
           if (g_pomSkipBreak) {
@@ -6477,7 +6484,7 @@ void handleModePomodoro() {
           } else {
               g_pomStudyDuration = 5;
           }
-          drawPomodoroScreen();
+          drawPomodoroScreen(true);
       }
       if (btn2Clicked) {
           if (g_pomStudyDuration > 60) {
@@ -6487,7 +6494,7 @@ void handleModePomodoro() {
           } else {
               g_pomStudyDuration = 120;
           }
-          drawPomodoroScreen();
+          drawPomodoroScreen(true);
       }
       if (btns.b1.doubleClick || btns.b2.doubleClick) {
           g_pomRemainingMin = g_pomStudyDuration;
@@ -6534,7 +6541,7 @@ void loop() {
     server.handleClient();
   }
 
-  if (ENABLE_DEEP_SLEEP && mode != MODE_UPLOAD) {
+  if (ENABLE_DEEP_SLEEP && mode != MODE_UPLOAD && mode != MODE_POMODORO) {
     if ((uint32_t)(millis() - lastUserActionMs) > SLEEP_AFTER_MS) {
       if (isUsbConnected()) {
         if (g_screensaverMode == 1 && g_spotifyClientId.length() > 0 && g_spotifyRefreshToken.length() > 0 && mode != MODE_SPOTIFY) {
