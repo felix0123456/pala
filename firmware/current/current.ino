@@ -6274,10 +6274,11 @@ void initPomodoro() {
 void drawPomodoroScreen(bool partial) {
   if (partial) {
     display.fastmodeOn();
+    display.clearMemory();
   } else {
     display.fastmodeOff();
+    display.clear();
   }
-  display.clear();
   gfx.disableInversion = true;
   
   u8g2.setFontMode(1);
