@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.12.0"
+#define FW_VERSION "1.12.1"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3554,13 +3554,13 @@ bool syncWithCloud(bool silent = false, bool background = false) {
                // Look up old password
                for (int i = 0; i < g_wifiCount; i++) {
                   if (g_wifiProfiles[i].ssid == ssid) {
-                     pass = g_wifiProfiles[i].password;
+                     pass = g_wifiProfiles[i].pass;
                      break;
                   }
                }
             }
             newProfiles[newCount].ssid = ssid;
-            newProfiles[newCount].password = pass;
+            newProfiles[newCount].pass = pass;
             newCount++;
          }
          
