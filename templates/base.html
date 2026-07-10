@@ -134,6 +134,11 @@
                 <a href='/library' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#128218;</span> Library</div>
                 </a>
+                {% if device or (user.devices and user.devices|length > 0) %}
+                <a href='/device/{{ device.mac_address if device else user.devices[0].mac_address }}/apps' class='nav-btn'>
+                    <div style="display:flex; gap:8px;"><span>&#9881;</span> Apps</div>
+                </a>
+                {% endif %}
                 <a href='/user' class='nav-btn'>
                     <div style="display:flex; gap:8px;"><span>&#128100;</span> User & Devices</div>
                 </a>

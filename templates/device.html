@@ -3,13 +3,11 @@
 {% block content %}
 <div class="flex-between" style="margin-bottom: 24px;">
     <div style="display: flex; align-items: center; gap: 16px;">
-        <a href="/" class="nav-btn" style="padding: 8px 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--border);">&larr; Back</a>
         <div style="display: flex; align-items: center; gap: 12px;">
             <h2 style="margin: 0; font-size: 24px;">{{ device.name }} <span style="font-size: 14px; color: var(--text-muted); font-weight: 400;">({{ device.mac_address }})</span></h2>
             <button onclick="document.getElementById('rename-modal').style.display='flex'" style="padding: 4px 8px; font-size: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-muted);">Edit</button>
         </div>
     </div>
-    <a href="/device/{{ device.mac_address }}/apps" class="nav-btn" style="background: var(--primary); color: var(--text); padding: 8px 16px;">Manage Apps &rarr;</a>
 </div>
 
 <!-- Rename Modal -->
