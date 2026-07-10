@@ -719,7 +719,7 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Device not registered")
     
     # Return settings and all user books (since we sync the whole library now)
-    books_data = [{"id": b.id, "title": b.title} for b in device.owner.books]
+    books_data = [{"id": b.id, "title": b.title, "folder": b.folder} for b in device.owner.books]
     bookmarks_data = [
         {"book_id": bm.book_id, "title": bm.book.title, "page_index": bm.page_index} 
         for bm in device.bookmarks if bm.book

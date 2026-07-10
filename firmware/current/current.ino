@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.12"
+#define FW_VERSION "1.11.13"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3550,11 +3550,25 @@ bool syncWithCloud(bool silent = false, bool background = false) {
         for (JsonObject b : arr) {
           int b_id = b["id"];
           String b_title = b["title"].as<String>();
+          String b_folder = "";
+          if (b.containsKey("folder")) {
+            b_folder = b["folder"].as<String>();
+          }
+          if (b_folder == "Root" || b_folder == "") {
+            b_folder = "";
+          } else {
+            b_folder = sanitizeFolderInput(b_folder);
+          }
           String safeTitle = sanitizeUploadedFilename(b_title);
           prefs.putInt((safeTitle + "_id").c_str(), b_id);
           
           if (!safeTitle.endsWith(".txt")) safeTitle += ".txt";
-          String fpath = "/reading/" + safeTitle;
+          String destDir = "/reading";
+          if (b_folder.length() > 0) {
+            destDir = "/reading/" + b_folder;
+            ensureDirRecursive(destDir);
+          }
+          String fpath = destDir + "/" + safeTitle;
           if (!FS.exists(fpath)) {
              if (!silent) {
                u8g2.setCursor(MARGIN_X, 60);
