@@ -6271,7 +6271,7 @@ void initPomodoro() {
   drawPomodoroScreen();
 }
 
-void drawPomodoroScreen(bool partial = false) {
+void drawPomodoroScreen(bool partial) {
   if (partial) {
     display.fastmodeOn();
   } else {
