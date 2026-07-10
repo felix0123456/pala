@@ -12,6 +12,7 @@ from typing import Optional
 import urllib.parse
 import asyncio
 import aiohttp
+from bs4 import BeautifulSoup
 
 import models
 from database import engine, get_db
@@ -382,6 +383,12 @@ async def search_gutendex(q: str, request: Request, db: Session = Depends(get_db
                     text_url = url
                     break
             
+            if not text_url:
+                for fmt, url in book_data.get("formats", {}).items():
+                    if "text/html" in fmt:
+                        text_url = url
+                        break
+            
             if text_url:
                 authors = ", ".join([a["name"] for a in book_data.get("authors", [])])
                 results.append({
@@ -440,6 +447,10 @@ async def fetch_result(data: FetchResultRequest, request: Request, db: Session =
             return {"error": "Failed to download text."}
             
         text_content = text_res.text
+        if "text/html" in text_res.headers.get("Content-Type", "") or data.download_url.endswith((".html", ".htm")) or "<html" in text_content.lower()[:500]:
+            soup = BeautifulSoup(text_content, "html.parser")
+            text_content = soup.get_text(separator="\n", strip=True)
+            
         filename = f"{data.id}.txt"
         filepath = os.path.join(BOOKS_DIR, filename)
         
@@ -463,9 +474,16 @@ async def upload_book(request: Request, file: UploadFile = File(...), db: Sessio
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     filename = file.filename
+    content = await file.read()
+    
+    if filename.lower().endswith((".html", ".htm")):
+        soup = BeautifulSoup(content, "html.parser")
+        content = soup.get_text(separator="\n", strip=True).encode("utf-8")
+        filename = filename.rsplit(".", 1)[0] + ".txt"
+
     filepath = os.path.join(BOOKS_DIR, filename)
     with open(filepath, "wb") as f:
-        f.write(await file.read())
+        f.write(content)
     
     # Check if already exists
     existing = db.query(models.Book).filter(models.Book.user_id == user.id, models.Book.title == filename).first()
@@ -478,6 +496,25 @@ async def upload_book(request: Request, file: UploadFile = File(...), db: Sessio
         db.commit()
     
     return {"status": "ok"}
+
+@app.get("/book/{book_id}/preview", response_class=HTMLResponse)
+async def preview_book(request: Request, book_id: int, db: Session = Depends(get_db)):
+    user = auth.get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    book = db.query(models.Book).filter(models.Book.id == book_id, models.Book.user_id == user.id).first()
+    if not book:
+        return RedirectResponse(url="/library", status_code=status.HTTP_302_FOUND)
+    
+    content = "File not found."
+    if os.path.exists(book.file_path):
+        with open(book.file_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read(50000)
+            if len(content) == 50000:
+                content += "\n\n... [Preview Truncated] ..."
+
+    return templates.TemplateResponse(request=request, name="preview.html", context={"user": user, "book": book, "content": content})
 
 # ----------------- TODOS API -----------------
 

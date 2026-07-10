@@ -21,7 +21,7 @@
         <p class="muted">Upload a .txt book manually to your cloud library.</p>
         <form action="/api/upload_book" method="POST" enctype="multipart/form-data" id="upload-book-form">
             <div style="display: flex; gap: 12px; align-items: center;">
-                <input type="file" name="file" accept=".txt" required style="flex-grow: 1;">
+                <input type="file" name="file" accept=".txt,.html,.htm" required style="flex-grow: 1;">
                 <button type="submit" style="width: auto;">Upload</button>
             </div>
         </form>
@@ -114,6 +114,7 @@
                 </div>
                 
                 <div style="display: flex; gap: 8px; margin-top: auto;">
+                    <button class="primary" style="flex: 1; padding: 4px; font-size: 12px;" onclick="window.location.href='/book/${book.id}/preview'">Preview</button>
                     <button class="secondary" style="flex: 1; padding: 4px; font-size: 12px;" onclick="promptMove(${book.id}, '${book.title}')">Move</button>
                     <button class="danger" style="flex: 1; padding: 4px; font-size: 12px;" onclick="deleteBook(${book.id})">Delete</button>
                 </div>
