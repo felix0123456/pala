@@ -28,8 +28,7 @@ class Device(Base):
     pairing_code = Column(String, index=True, nullable=True)
     battery_level = Column(Integer, default=100)
     firmware_version = Column(String, nullable=True)
-    wifi_ssid = Column(String, nullable=True)
-    
+
     font_size = Column(Integer, default=10)
     sleep_timeout = Column(Integer, default=120)
     line_gap = Column(Integer, default=0)
@@ -44,6 +43,8 @@ class Device(Base):
     cal_url = Column(String, nullable=True)
     tz_offset = Column(Integer, default=0)
     screensaver_updated_at = Column(Integer, default=0)
+    wifi_ssids = Column(String, nullable=True) # JSON array of up to 5 SSIDs
+    pending_settings = Column(String, default="{}") # JSON dict of queued setting updates
     
     app_todo = Column(Boolean, default=True)
     app_cal = Column(Boolean, default=True)

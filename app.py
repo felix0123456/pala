@@ -64,7 +64,9 @@ with engine.connect() as conn:
         "app_chess BOOLEAN DEFAULT TRUE",
         "app_pom BOOLEAN DEFAULT TRUE",
         "screensaver_updated_at INTEGER DEFAULT 0",
-        "wifi_ssid VARCHAR"
+        "wifi_ssid VARCHAR",
+        "wifi_ssids VARCHAR",
+        "pending_settings VARCHAR DEFAULT '{}'"
     ]
     for col in new_columns:
         try:
@@ -217,7 +219,22 @@ async def device_view(request: Request, mac_address: str, db: Session = Depends(
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if not device:
         return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    return templates.TemplateResponse(request=request, name="device.html", context={"device": device, "books": user.books, "user": user})
+        
+    wifi_ssids = []
+    if device.wifi_ssids:
+        try:
+            wifi_ssids = json.loads(device.wifi_ssids)
+        except:
+            pass
+    while len(wifi_ssids) < 5:
+        wifi_ssids.append("")
+        
+    return templates.TemplateResponse(request=request, name="device.html", context={
+        "device": device, 
+        "books": user.books, 
+        "user": user,
+        "wifi_ssids": wifi_ssids
+    })
 
 @app.post("/api/device/{mac_address}/settings")
 async def update_device_settings(
@@ -227,8 +244,6 @@ async def update_device_settings(
     lgap: int = Form(...), 
     scr_mode: int = Form(0),
     cfg_invert: Optional[bool] = Form(False),
-    wifi_ssid: Optional[str] = Form(None),
-    wifi_password: Optional[str] = Form(None),
     request: Request = None, 
     db: Session = Depends(get_db)):
     user = auth.get_current_user(request, db)
@@ -237,17 +252,46 @@ async def update_device_settings(
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if not device:
         raise HTTPException(status_code=404)
+        
+    # Queue settings
+    pending = json.loads(device.pending_settings or "{}")
+    pending["font_size"] = font
+    pending["sleep_timeout"] = sleep
+    pending["line_gap"] = lgap
+    pending["screensaver_mode"] = scr_mode
+    pending["invert_display"] = cfg_invert
+
     device.font_size = font
     device.sleep_timeout = sleep
     device.line_gap = lgap
     device.screensaver_mode = scr_mode
     device.invert_display = cfg_invert
     
-    if wifi_ssid is not None:
-        device.wifi_ssid = wifi_ssid
-    if wifi_password:
-        pending_wifi_credentials[mac_address] = wifi_password
-
+    # Process up to 5 WiFi slots
+    form_data = await request.form()
+    new_ssids = []
+    wifi_slots = []
+    
+    for i in range(5):
+        ssid = form_data.get(f"wifi_ssid_{i}", "").strip()
+        pw = form_data.get(f"wifi_password_{i}", "").strip()
+        if ssid:
+            new_ssids.append(ssid)
+            slot = {"ssid": ssid}
+            if pw:
+                slot["pass"] = pw
+            wifi_slots.append(slot)
+            
+    if wifi_slots:
+        device.wifi_ssids = json.dumps(new_ssids)
+        pending["wifi_slots"] = wifi_slots
+        # Because we can't save passwords to the DB, we MUST stage the passwords in-memory
+        pending_wifi_credentials[mac_address] = {i: slot["pass"] for i, slot in enumerate(wifi_slots) if "pass" in slot}
+        # In the DB queue, we'll store the SSIDs without passwords, passwords injected later
+        for slot in wifi_slots:
+            slot.pop("pass", None)
+            
+    device.pending_settings = json.dumps(pending)
     db.commit()
     return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
 
@@ -266,6 +310,12 @@ async def update_device_calendar(
         raise HTTPException(status_code=404)
     device.cal_url = cal_url
     device.tz_offset = tz_offset
+    
+    pending = json.loads(device.pending_settings or "{}")
+    pending["cal_url"] = cal_url
+    pending["tz_offset"] = tz_offset
+    device.pending_settings = json.dumps(pending)
+    
     db.commit()
     return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
 
@@ -288,6 +338,14 @@ async def update_device_spotify(
     device.spotify_client_id = spot_id
     device.spotify_client_secret = spot_secret
     device.spotify_refresh_token = spot_refresh
+    
+    pending = json.loads(device.pending_settings or "{}")
+    pending["spotify_screensaver"] = spot_scr
+    pending["spotify_client_id"] = spot_id
+    pending["spotify_client_secret"] = spot_secret
+    pending["spotify_refresh_token"] = spot_refresh
+    device.pending_settings = json.dumps(pending)
+    
     db.commit()
     return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
 
@@ -304,6 +362,11 @@ async def update_device_chess(
     if not device:
         raise HTTPException(status_code=404)
     device.chess_elo = chess_elo
+    
+    pending = json.loads(device.pending_settings or "{}")
+    pending["chess_elo"] = chess_elo
+    device.pending_settings = json.dumps(pending)
+    
     db.commit()
     return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
 
@@ -317,6 +380,11 @@ async def rename_device(mac_address: str, name: str = Form(...), request: Reques
     device = db.query(models.Device).filter(models.Device.mac_address == mac_address, models.Device.user_id == user.id).first()
     if device:
         device.name = name
+        
+        pending = json.loads(device.pending_settings or "{}")
+        pending["device_name"] = name
+        device.pending_settings = json.dumps(pending)
+        
         db.commit()
     return RedirectResponse(f"/device/{mac_address}", status_code=303)
 
@@ -357,6 +425,15 @@ async def update_device_apps(
     device.app_spot = app_spot
     device.app_chess = app_chess
     device.app_pom = app_pom
+    
+    pending = json.loads(device.pending_settings or "{}")
+    pending["app_todo"] = app_todo
+    pending["app_cal"] = app_cal
+    pending["app_spot"] = app_spot
+    pending["app_chess"] = app_chess
+    pending["app_pom"] = app_pom
+    device.pending_settings = json.dumps(pending)
+    
     db.commit()
     return RedirectResponse(f"/device/{mac_address}/apps", status_code=303)
 
@@ -728,7 +805,7 @@ class SyncPushData(BaseModel):
     cal_url: Optional[str] = None
     tz_offset: Optional[int] = None
     firmware_version: Optional[str] = None
-    wifi_ssid: Optional[str] = None
+    wifi_ssids: Optional[list] = None
     todos: Optional[list] = None
 
 @app.post("/api/device/register")
@@ -770,7 +847,7 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
     if data.cal_url is not None: device.cal_url = data.cal_url
     if data.tz_offset is not None: device.tz_offset = data.tz_offset
     if data.firmware_version is not None: device.firmware_version = data.firmware_version
-    if data.wifi_ssid is not None: device.wifi_ssid = data.wifi_ssid
+    if data.wifi_ssids is not None: device.wifi_ssids = json.dumps(data.wifi_ssids)
 
     # Update bookmarks
     for bm in data.bookmarks:
@@ -818,26 +895,6 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
     ]
     
     resp = {
-        "device_name": device.name or "My Pala",
-        "font_size": device.font_size,
-        "sleep_timeout": device.sleep_timeout,
-        "line_gap": device.line_gap,
-        "screensaver_mode": device.screensaver_mode,
-        "invert_display": device.invert_display,
-        "spotify_client_id": device.spotify_client_id,
-        "spotify_client_secret": device.spotify_client_secret,
-        "spotify_refresh_token": device.spotify_refresh_token,
-        "spotify_screensaver": device.spotify_screensaver,
-        "chess_elo": device.chess_elo,
-        "cal_url": device.cal_url or "",
-        "tz_offset": device.tz_offset,
-        "app_todo": device.app_todo,
-        "app_cal": device.app_cal,
-        "app_spot": device.app_spot,
-        "app_chess": device.app_chess,
-        "app_pom": device.app_pom,
-        "screensaver_updated_at": device.screensaver_updated_at,
-        "wifi_ssid": device.wifi_ssid or "",
         "books": books_data,
         "bookmarks": bookmarks_data,
         "todos": [
@@ -846,10 +903,20 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         ]
     }
     
-    # Inject pending WiFi password if it exists
-    if mac in pending_wifi_credentials:
-        resp["wifi_password"] = pending_wifi_credentials.pop(mac)
-        
+    # Merge pending settings
+    pending = json.loads(device.pending_settings or "{}")
+    if pending:
+        resp.update(pending)
+        device.pending_settings = "{}"
+        db.commit()
+    
+    # Inject pending WiFi passwords if they exist for the requested slots
+    if "wifi_slots" in resp and mac in pending_wifi_credentials:
+        pw_dict = pending_wifi_credentials.pop(mac)
+        for i, slot in enumerate(resp["wifi_slots"]):
+            if i in pw_dict:
+                slot["pass"] = pw_dict[i]
+                
     return resp
 
 @app.get("/api/book/{book_id}")
@@ -905,6 +972,11 @@ async def upload_screensaver(mac: str, file: UploadFile = File(...), db: Session
         f.write(await file.read())
         
     device.screensaver_updated_at = int(time.time())
+    
+    pending = json.loads(device.pending_settings or "{}")
+    pending["screensaver_updated_at"] = device.screensaver_updated_at
+    device.pending_settings = json.dumps(pending)
+    
     db.commit()
     return {"status": "ok", "message": "Screensaver updated"}
 

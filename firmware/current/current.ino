@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.17"
+#define FW_VERSION "1.12.0"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3502,41 +3502,73 @@ bool syncWithCloud(bool silent = false, bool background = false) {
          String curl = doc["cal_url"].as<String>();
          g_calUrl = curl;
          prefs.putString("cfg_cal_url", curl);
-        if (doc.containsKey("tz_offset")) {
-          int tzo = doc["tz_offset"];
-          g_timezoneOffsetHours = tzo;
-          prefs.putInt("cfg_tz_offset", tzo);
-       }
-       if (doc.containsKey("device_name")) {
-          String dname = doc["device_name"].as<String>();
-          g_deviceName = dname;
-          prefs.putString("cfg_name", dname);
-       }
-        if (doc.containsKey("app_todo")) {
-          bool val = doc["app_todo"].as<bool>();
-          g_appTodo = val;
-          prefs.putBool("cfg_app_todo", val);
-       }
-       if (doc.containsKey("app_cal")) {
-          bool val = doc["app_cal"].as<bool>();
-          g_appCal = val;
-          prefs.putBool("cfg_app_cal", val);
-       }
-       if (doc.containsKey("app_spot")) {
-          bool val = doc["app_spot"].as<bool>();
-          g_appSpot = val;
-          prefs.putBool("cfg_app_spot", val);
-       }
-       if (doc.containsKey("app_chess")) {
-          bool val = doc["app_chess"].as<bool>();
-          g_appChess = val;
-          prefs.putBool("cfg_app_chess", val);
-       }
-       if (doc.containsKey("app_pom")) {
-          bool val = doc["app_pom"].as<bool>();
-          g_appPom = val;
-          prefs.putBool("cfg_app_pom", val);
-       }
+      }
+      if (doc.containsKey("tz_offset")) {
+         int tzo = doc["tz_offset"];
+         g_timezoneOffsetHours = tzo;
+         prefs.putInt("cfg_tz_offset", tzo);
+      }
+      if (doc.containsKey("device_name")) {
+         String dname = doc["device_name"].as<String>();
+         g_deviceName = dname;
+         prefs.putString("cfg_name", dname);
+      }
+      if (doc.containsKey("app_todo")) {
+         bool val = doc["app_todo"].as<bool>();
+         g_appTodo = val;
+         prefs.putBool("cfg_app_todo", val);
+      }
+      if (doc.containsKey("app_cal")) {
+         bool val = doc["app_cal"].as<bool>();
+         g_appCal = val;
+         prefs.putBool("cfg_app_cal", val);
+      }
+      if (doc.containsKey("app_spot")) {
+         bool val = doc["app_spot"].as<bool>();
+         g_appSpot = val;
+         prefs.putBool("cfg_app_spot", val);
+      }
+      if (doc.containsKey("app_chess")) {
+         bool val = doc["app_chess"].as<bool>();
+         g_appChess = val;
+         prefs.putBool("cfg_app_chess", val);
+      }
+      if (doc.containsKey("app_pom")) {
+         bool val = doc["app_pom"].as<bool>();
+         g_appPom = val;
+         prefs.putBool("cfg_app_pom", val);
+      }
+      
+      if (doc.containsKey("wifi_slots")) {
+         JsonArray slots = doc["wifi_slots"].as<JsonArray>();
+         WifiProfile newProfiles[MAX_WIFI_PROFILES];
+         int newCount = 0;
+         
+         for (JsonObject slot : slots) {
+            if (newCount >= MAX_WIFI_PROFILES) break;
+            String ssid = slot["ssid"].as<String>();
+            String pass = "";
+            if (slot.containsKey("pass")) {
+               pass = slot["pass"].as<String>();
+            } else {
+               // Look up old password
+               for (int i = 0; i < g_wifiCount; i++) {
+                  if (g_wifiProfiles[i].ssid == ssid) {
+                     pass = g_wifiProfiles[i].password;
+                     break;
+                  }
+               }
+            }
+            newProfiles[newCount].ssid = ssid;
+            newProfiles[newCount].password = pass;
+            newCount++;
+         }
+         
+         g_wifiCount = newCount;
+         for (int i = 0; i < g_wifiCount; i++) {
+            g_wifiProfiles[i] = newProfiles[i];
+         }
+         saveWifiProfiles();
       }
 
       if (doc.containsKey("bookmarks")) {
@@ -3639,6 +3671,11 @@ bool syncWithCloud(bool silent = false, bool background = false) {
   pushDoc["chess_elo"] = g_chessElo;
   if (g_calUrl.length() > 0) pushDoc["cal_url"] = g_calUrl;
   pushDoc["tz_offset"] = g_timezoneOffsetHours;
+  
+  JsonArray wifiSsids = pushDoc.createNestedArray("wifi_ssids");
+  for (int i = 0; i < g_wifiCount; i++) {
+    wifiSsids.add(g_wifiProfiles[i].ssid);
+  }
 
   JsonArray pushBookmarks = pushDoc.createNestedArray("bookmarks");
   File root = FS.open("/reading");

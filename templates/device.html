@@ -74,16 +74,20 @@
                 Invert Display (Night Mode)
             </label>
             <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
-            <h3 style="margin: 0 0 12px 0; font-size: 16px;">WiFi Configuration</h3>
-            <div class="grid-2">
-                <div>
-                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">WiFi SSID</label>
-                    <input type="text" name="wifi_ssid" value="{{ device.wifi_ssid or '' }}" placeholder="Network Name" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+            <h3 style="margin: 0 0 12px 0; font-size: 16px;">WiFi Configuration (Up to 5)</h3>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                {% for i in range(5) %}
+                <div class="grid-2" style="background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px;">
+                    <div>
+                        <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">WiFi SSID {{ i + 1 }}</label>
+                        <input type="text" name="wifi_ssid_{{ i }}" value="{{ wifi_ssids[i] }}" placeholder="Network Name" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">WiFi Password {{ i + 1 }}</label>
+                        <input type="password" name="wifi_password_{{ i }}" placeholder="*******" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+                    </div>
                 </div>
-                <div>
-                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">WiFi Password</label>
-                    <input type="password" name="wifi_password" placeholder="*******" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
-                </div>
+                {% endfor %}
             </div>
             
             <button type="submit" style="margin-top: 8px;">Save Settings</button>
