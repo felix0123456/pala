@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.11.16"
+#define FW_VERSION "1.11.17"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3301,6 +3301,24 @@ bool syncWithCloud(bool silent = false, bool background = false) {
       ALLOC_JSON_DOC(regDoc, 512);
       DeserializationError err = deserializeJson(regDoc, payload);
       if (!err && regDoc["status"] == "pairing") {
+        if (prefs.getBool("cfg_registered", false)) {
+          if (!silent) {
+            prepareMenuFrame();
+            u8g2.setFont(BOLD_FONT);
+            u8g2.setCursor(MARGIN_X, 20);
+            u8g2.print("Device Deleted");
+            u8g2.setFont(MAIN_FONT);
+            u8g2.setCursor(MARGIN_X, 40);
+            u8g2.print("Resetting to factory...");
+            display.update();
+            delay(2000);
+          }
+          http.end();
+          doFactoryReset();
+          ESP.restart();
+          return false;
+        }
+
         if (!gotCode) {
           if (background) { http.end(); WiFi.disconnect(true, true); return false; }
           silent = false;
@@ -3334,6 +3352,7 @@ bool syncWithCloud(bool silent = false, bool background = false) {
         http.end();
         continue;
       } else if (!err && regDoc["status"] == "ok") {
+        prefs.putBool("cfg_registered", true);
         alreadyRegistered = true;
         http.end();
         break; // Registered!
