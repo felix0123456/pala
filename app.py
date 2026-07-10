@@ -13,6 +13,9 @@ import urllib.parse
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
+import tempfile
+import ebooklib
+from ebooklib import epub
 
 import models
 from database import engine, get_db
@@ -389,6 +392,12 @@ async def search_gutendex(q: str, request: Request, db: Session = Depends(get_db
                         text_url = url
                         break
             
+            if not text_url:
+                for fmt, url in book_data.get("formats", {}).items():
+                    if "application/epub+zip" in fmt:
+                        text_url = url
+                        break
+            
             if text_url:
                 authors = ", ".join([a["name"] for a in book_data.get("authors", [])])
                 results.append({
@@ -445,11 +454,27 @@ async def fetch_result(data: FetchResultRequest, request: Request, db: Session =
         text_res = requests.get(data.download_url)
         if text_res.status_code != 200:
             return {"error": "Failed to download text."}
-            
-        text_content = text_res.text
-        if "text/html" in text_res.headers.get("Content-Type", "") or data.download_url.endswith((".html", ".htm")) or "<html" in text_content.lower()[:500]:
-            soup = BeautifulSoup(text_content, "html.parser")
-            text_content = soup.get_text(separator="\n", strip=True)
+        content_type = text_res.headers.get("Content-Type", "").lower()
+        if data.download_url.endswith(".epub") or "epub" in content_type:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".epub") as tmp:
+                tmp.write(text_res.content)
+                tmp_path = tmp.name
+            try:
+                book = epub.read_epub(tmp_path)
+                chapters = []
+                for item in book.get_items():
+                    if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                        soup = BeautifulSoup(item.get_content(), "html.parser")
+                        chapters.append(soup.get_text(separator="\n", strip=True))
+                text_content = "\n\n".join(chapters)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+        else:
+            text_content = text_res.text
+            if "text/html" in content_type or data.download_url.endswith((".html", ".htm")) or "<html" in text_content.lower()[:500]:
+                soup = BeautifulSoup(text_content, "html.parser")
+                text_content = soup.get_text(separator="\n", strip=True)
             
         filename = f"{data.id}.txt"
         filepath = os.path.join(BOOKS_DIR, filename)
@@ -479,6 +504,22 @@ async def upload_book(request: Request, file: UploadFile = File(...), db: Sessio
     if filename.lower().endswith((".html", ".htm")):
         soup = BeautifulSoup(content, "html.parser")
         content = soup.get_text(separator="\n", strip=True).encode("utf-8")
+        filename = filename.rsplit(".", 1)[0] + ".txt"
+    elif filename.lower().endswith(".epub"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".epub") as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            book = epub.read_epub(tmp_path)
+            chapters = []
+            for item in book.get_items():
+                if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                    soup = BeautifulSoup(item.get_content(), "html.parser")
+                    chapters.append(soup.get_text(separator="\n", strip=True))
+            content = "\n\n".join(chapters).encode("utf-8")
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
         filename = filename.rsplit(".", 1)[0] + ".txt"
 
     filepath = os.path.join(BOOKS_DIR, filename)
