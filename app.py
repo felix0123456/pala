@@ -858,12 +858,14 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
         if existing:
             existing.page_index = bm.get("page_index", 0)
         else:
-            new_bm = models.Bookmark(
-                device_mac=data.mac_address,
-                book_id=bm.get("book_id"),
-                page_index=bm.get("page_index", 0)
-            )
-            db.add(new_bm)
+            book_exists = db.query(models.Book).filter(models.Book.id == bm.get("book_id")).first()
+            if book_exists:
+                new_bm = models.Bookmark(
+                    device_mac=data.mac_address,
+                    book_id=bm.get("book_id"),
+                    page_index=bm.get("page_index", 0)
+                )
+                db.add(new_bm)
 
     if data.todos is not None:
         user = device.owner

@@ -37,7 +37,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 EInkDisplay_WirelessPaperV1_2 display;
 
 // ---------------------- Firmware Version ----------------------
-#define FW_VERSION "1.12.1"
+#define FW_VERSION "1.12.2"
 
 static String g_wifiSsid = "";
 static String g_wifiPass = "";
@@ -3254,6 +3254,44 @@ void stopUploadServicesOnly() {
   g_sleepUploadTmpPath = "";
 }
 
+static void deleteMissingBooksRecursive(const String& absDir, String validPaths[], int numValid) {
+  File dir = FS.open(absDir);
+  if (!dir || !dir.isDirectory()) return;
+
+  File f = dir.openNextFile();
+  while (f) {
+    String entryName = String(f.name());
+    String absPath;
+    if (entryName.startsWith("/")) {
+      absPath = entryName;
+    } else {
+      absPath = absDir;
+      if (!absPath.endsWith("/")) absPath += "/";
+      absPath += entryName;
+    }
+
+    if (f.isDirectory()) {
+      deleteMissingBooksRecursive(absPath, validPaths, numValid);
+    } else if (absPath.endsWith(".txt")) {
+      bool isValid = false;
+      for (int i = 0; i < numValid; i++) {
+        if (validPaths[i] == absPath) {
+          isValid = true;
+          break;
+        }
+      }
+      if (!isValid) {
+        Serial.println("Deleting missing book: " + absPath);
+        FS.remove(absPath);
+      }
+    }
+    
+    f.close();
+    f = dir.openNextFile();
+  }
+  dir.close();
+}
+
 bool syncWithCloud(bool silent = false, bool background = false) {
   if (g_wifiCount == 0) return false;
 
@@ -3598,6 +3636,10 @@ bool syncWithCloud(bool silent = false, bool background = false) {
 
       if (doc.containsKey("books")) {
         JsonArray arr = doc["books"].as<JsonArray>();
+        
+        String validPaths[MAX_BOOKS];
+        int numValid = 0;
+        
         for (JsonObject b : arr) {
           int b_id = b["id"];
           String b_title = b["title"].as<String>();
@@ -3620,6 +3662,11 @@ bool syncWithCloud(bool silent = false, bool background = false) {
             ensureDirRecursive(destDir);
           }
           String fpath = destDir + "/" + safeTitle;
+          
+          if (numValid < MAX_BOOKS) {
+            validPaths[numValid++] = fpath;
+          }
+          
           if (!FS.exists(fpath)) {
              if (!silent) {
                u8g2.setCursor(MARGIN_X, 60);
@@ -3642,6 +3689,8 @@ bool syncWithCloud(bool silent = false, bool background = false) {
              httpDl.end();
           }
         }
+        
+        deleteMissingBooksRecursive("/reading", validPaths, numValid);
       }
     }
   }
