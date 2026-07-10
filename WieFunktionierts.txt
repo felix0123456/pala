@@ -1,0 +1,41 @@
+Willkommen bei Pala!
+Dein persönlicher, minimalistischer E-Reader.
+
+Diese Anleitung zeigt dir, wie du das Beste aus deinem Pala herausholst.
+
+=== 1. Erste Schritte & WLAN ===
+Damit dein Pala Bücher herunterladen und Einstellungen synchronisieren kann, braucht er WLAN.
+1. Schalte das Gerät ein (mit Knopf 1). Wenn Pala dein WLAN nicht kennt, erstellt er ein eigenes Netzwerk namens "PALA-XXXXXX".
+2. Verbinde dein Smartphone oder deinen PC mit diesem Netzwerk. Das Passwort lautet: palaread
+3. Öffne deinen Browser und gehe auf: http://192.168.4.1
+4. Trage dort deine WLAN-Zugangsdaten ein und speichere sie. Pala verbindet sich nun mit deinem Heimnetzwerk.
+
+=== 2. Steuerung & Knöpfe ===
+Dein Pala wird ganz einfach über zwei Knöpfe bedient:
+
+Knopf 1 (Hauptknopf):
+- Kurzer Druck: Eine Seite vorwärts blättern oder im Menü nach unten navigieren.
+- Langer Druck: Eine Auswahl bestätigen (z.B. ein Buch öffnen), ein Lesezeichen setzen oder einen Modus beenden.
+- Wichtig: Nur mit diesem Knopf kannst du das Gerät aus dem Ruhemodus aufwecken!
+
+Knopf 2 (Zweitknopf):
+- Kurzer Druck: Eine Seite zurück blättern oder im Menü nach oben navigieren.
+
+=== 3. Die Pala Cloud Webseite ===
+Besuche unsere Webseite unter: https://pala.felixresch.com
+Erstelle dir dort einen Account und registriere dein Gerät über die MAC-Adresse (diese wird dir auf dem Gerät angezeigt, falls es noch nicht verknüpft ist).
+
+Auf der Webseite kannst du:
+- Bücher hochladen: Lade deine Lieblingsbücher (unterstützt werden .txt und .html Dateien) in deine Bibliothek hoch.
+- Bibliothek verwalten: Wähle aus, welche Bücher auf dein Gerät synchronisiert werden sollen.
+- Einstellungen anpassen: Ändere die Schriftgröße, den Zeilenabstand oder die Zeit bis zum Auto-Sleep bequem über den Browser.
+- Apps konfigurieren: Richte den Pomodoro-Timer ein, verbinde deinen Spotify-Screensaver oder gestalte eigene interaktive Bildschirmschoner.
+
+=== 4. Synchronisation ===
+Dein Pala synchronisiert sich automatisch mit der Cloud, sobald er eine WLAN-Verbindung hat. Dabei werden:
+- Neue Bücher heruntergeladen, die du zum Synchronisieren markiert hast.
+- Deine Webseite-Einstellungen auf das Gerät übertragen.
+- Dein Lesefortschritt und deine Lesezeichen sicher in der Cloud gespeichert.
+
+Wir wünschen dir viel Spaß beim Lesen und Entspannen!
+Dein Pala-Team

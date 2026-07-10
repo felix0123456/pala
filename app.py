@@ -63,7 +63,8 @@ with engine.connect() as conn:
         "app_spot BOOLEAN DEFAULT TRUE",
         "app_chess BOOLEAN DEFAULT TRUE",
         "app_pom BOOLEAN DEFAULT TRUE",
-        "screensaver_updated_at INTEGER DEFAULT 0"
+        "screensaver_updated_at INTEGER DEFAULT 0",
+        "wifi_ssid VARCHAR"
     ]
     for col in new_columns:
         try:
@@ -80,6 +81,9 @@ with engine.connect() as conn:
 
 app = FastAPI(title="Pala Cloud Hub")
 templates = Jinja2Templates(directory="templates")
+
+# Temporary in-memory storage for WiFi passwords
+pending_wifi_credentials = {}
 
 FIRMWARE_DIR = os.getenv("FIRMWARE_DIR", "data/firmware/build")
 GITHUB_REPO = "felix0123456/pala"
@@ -223,6 +227,8 @@ async def update_device_settings(
     lgap: int = Form(...), 
     scr_mode: int = Form(0),
     cfg_invert: Optional[bool] = Form(False),
+    wifi_ssid: Optional[str] = Form(None),
+    wifi_password: Optional[str] = Form(None),
     request: Request = None, 
     db: Session = Depends(get_db)):
     user = auth.get_current_user(request, db)
@@ -236,6 +242,12 @@ async def update_device_settings(
     device.line_gap = lgap
     device.screensaver_mode = scr_mode
     device.invert_display = cfg_invert
+    
+    if wifi_ssid is not None:
+        device.wifi_ssid = wifi_ssid
+    if wifi_password:
+        pending_wifi_credentials[mac_address] = wifi_password
+
     db.commit()
     return RedirectResponse(url=f"/device/{mac_address}", status_code=status.HTTP_302_FOUND)
 
@@ -716,6 +728,7 @@ class SyncPushData(BaseModel):
     cal_url: Optional[str] = None
     tz_offset: Optional[int] = None
     firmware_version: Optional[str] = None
+    wifi_ssid: Optional[str] = None
     todos: Optional[list] = None
 
 @app.post("/api/device/register")
@@ -757,6 +770,7 @@ async def sync_push(data: SyncPushData, db: Session = Depends(get_db)):
     if data.cal_url is not None: device.cal_url = data.cal_url
     if data.tz_offset is not None: device.tz_offset = data.tz_offset
     if data.firmware_version is not None: device.firmware_version = data.firmware_version
+    if data.wifi_ssid is not None: device.wifi_ssid = data.wifi_ssid
 
     # Update bookmarks
     for bm in data.bookmarks:
@@ -823,6 +837,7 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
         "app_chess": device.app_chess,
         "app_pom": device.app_pom,
         "screensaver_updated_at": device.screensaver_updated_at,
+        "wifi_ssid": device.wifi_ssid or "",
         "books": books_data,
         "bookmarks": bookmarks_data,
         "todos": [
@@ -830,6 +845,11 @@ async def sync_pull(mac: str, db: Session = Depends(get_db)):
             for t in device.owner.todos
         ]
     }
+    
+    # Inject pending WiFi password if it exists
+    if mac in pending_wifi_credentials:
+        resp["wifi_password"] = pending_wifi_credentials.pop(mac)
+        
     return resp
 
 @app.get("/api/book/{book_id}")

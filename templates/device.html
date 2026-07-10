@@ -73,6 +73,19 @@
                 <input type="checkbox" name="cfg_invert" value="true" {% if device.invert_display %}checked{% endif %}>
                 Invert Display (Night Mode)
             </label>
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
+            <h3 style="margin: 0 0 12px 0; font-size: 16px;">WiFi Configuration</h3>
+            <div class="grid-2">
+                <div>
+                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">WiFi SSID</label>
+                    <input type="text" name="wifi_ssid" value="{{ device.wifi_ssid or '' }}" placeholder="Network Name" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+                </div>
+                <div>
+                    <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px; display: block;">WiFi Password</label>
+                    <input type="password" name="wifi_password" placeholder="*******" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); box-sizing: border-box;">
+                </div>
+            </div>
+            
             <button type="submit" style="margin-top: 8px;">Save Settings</button>
         </form>
     </div>

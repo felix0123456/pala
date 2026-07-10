@@ -28,6 +28,7 @@ class Device(Base):
     pairing_code = Column(String, index=True, nullable=True)
     battery_level = Column(Integer, default=100)
     firmware_version = Column(String, nullable=True)
+    wifi_ssid = Column(String, nullable=True)
     
     font_size = Column(Integer, default=10)
     sleep_timeout = Column(Integer, default=120)
